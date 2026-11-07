@@ -1,6 +1,7 @@
 package kube
 
 import (
+	"bufio"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -68,6 +69,31 @@ func requireSessionStartHook(t *testing.T, doc settingsDoc) {
 	if hooks[0].Type != "command" || hooks[0].Command != approvedSessionStartHook {
 		t.Fatalf("hook = (%q, %q), want (%q, %q)", hooks[0].Type, hooks[0].Command, "command", approvedSessionStartHook)
 	}
+}
+
+func parseSkillFrontMatter(t *testing.T, b []byte) map[string]string {
+	t.Helper()
+	fields := map[string]string{}
+	scanner := bufio.NewScanner(strings.NewReader(string(b)))
+	if !scanner.Scan() || strings.TrimSpace(scanner.Text()) != "---" {
+		t.Fatalf("skill is missing front matter:\n%s", b)
+	}
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "---" {
+			return fields
+		}
+		key, value, ok := strings.Cut(line, ":")
+		if !ok {
+			t.Fatalf("invalid front matter line %q", line)
+		}
+		fields[strings.TrimSpace(key)] = strings.Trim(strings.TrimSpace(value), `"`)
+	}
+	if err := scanner.Err(); err != nil {
+		t.Fatal(err)
+	}
+	t.Fatalf("skill front matter is not closed:\n%s", b)
+	return nil
 }
 
 func TestSetupHooksIdempotent(t *testing.T) {
@@ -148,7 +174,7 @@ func TestSetupSkillInstallsAndIsIdempotent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.HasPrefix(string(b), "---\nname: k8s-axi\n") {
-		t.Errorf("unexpected skill:\n%s", b)
+	if got := parseSkillFrontMatter(t, b)["name"]; got != "k8s-axi" {
+		t.Errorf("skill name = %q, want k8s-axi", got)
 	}
 }
