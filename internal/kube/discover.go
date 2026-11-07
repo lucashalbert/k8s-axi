@@ -107,18 +107,26 @@ func discoverKinds(ctx context.Context, c *Clients, group, kind string, limit in
 	}
 	crds, source := customResources(ctx, c.Dynamic)
 
-	var all []kindInfo
+	selected := map[string]kindInfo{}
 	for _, l := range lists {
 		gv, perr := schema.ParseGroupVersion(l.GroupVersion)
-		if perr != nil || preferred[gv.Group] != l.GroupVersion {
-			continue // one version per group: the one the server prefers
+		if perr != nil {
+			continue
 		}
 		for _, r := range l.APIResources {
 			if strings.Contains(r.Name, "/") {
 				continue // subresource
 			}
-			all = append(all, kindInfo{res: r, group: gv.Group, ver: gv.Version, crd: isCRD(source, crds, gv.Group, r.Name)})
+			k := gv.Group + "/" + r.Name
+			info := kindInfo{res: r, group: gv.Group, ver: gv.Version, crd: isCRD(source, crds, gv.Group, r.Name)}
+			if _, ok := selected[k]; !ok || preferred[gv.Group] == l.GroupVersion {
+				selected[k] = info
+			}
 		}
+	}
+	all := make([]kindInfo, 0, len(selected))
+	for _, k := range selected {
+		all = append(all, k)
 	}
 	sort.Slice(all, func(i, j int) bool {
 		if all[i].group != all[j].group {

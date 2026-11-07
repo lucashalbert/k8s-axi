@@ -129,6 +129,39 @@ func TestDiscoverFilters(t *testing.T) {
 	}
 }
 
+func TestDiscoverIncludesResourcesOnlyServedOutsidePreferredVersion(t *testing.T) {
+	c, fd := discoverFixture(t, crdObject("example.com", "widgets"), crdObject("example.com", "gadgets"))
+	fd.Resources = []*metav1.APIResourceList{
+		{GroupVersion: "example.com/v2", APIResources: []metav1.APIResource{
+			{Name: "gadgets", SingularName: "gadget", Kind: "Gadget", Namespaced: true, Verbs: metav1.Verbs{"get", "list"}},
+		}},
+		{GroupVersion: "example.com/v1", APIResources: []metav1.APIResource{
+			{Name: "widgets", SingularName: "widget", Kind: "Widget", Namespaced: true, Verbs: metav1.Verbs{"get", "list"}},
+			{Name: "gadgets", SingularName: "gadget", Kind: "Gadget", Namespaced: true, Verbs: metav1.Verbs{"get", "list"}},
+		}},
+	}
+
+	code, out, _, _ := runDiscover(t, c, "--group", "example.com")
+	if code != 0 {
+		t.Fatalf("exit %d", code)
+	}
+	k := kinds(out)
+	if out["matched"] != float64(2) || len(k) != 2 {
+		t.Fatalf("example.com matched = %v, kinds = %v", out["matched"], k)
+	}
+	if k["Gadget"]["version"] != "v2" {
+		t.Errorf("Gadget version = %v, want v2", k["Gadget"]["version"])
+	}
+	if k["Widget"]["version"] != "v1" {
+		t.Errorf("Widget version = %v, want v1", k["Widget"]["version"])
+	}
+
+	_, out, _, _ = runDiscover(t, c, "--kind", "Widget")
+	if k := kinds(out); len(k) != 1 || k["Widget"]["group"] != "example.com" || k["Widget"]["version"] != "v1" {
+		t.Errorf("--kind Widget: %v", k)
+	}
+}
+
 func TestDiscoverEmptyResultIsStated(t *testing.T) {
 	c, _ := discoverFixture(t)
 	code, out, _, _ := runDiscover(t, c, "--kind", "nosuchthing")
