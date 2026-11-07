@@ -14,6 +14,35 @@ Download an archive for Linux, macOS or Windows (amd64 or arm64) from the [relea
 go install github.com/lucashalbert/k8s-axi/cmd/k8s-axi@latest
 ```
 
+## Usage
+
+```sh
+k8s-axi cluster info                  # context, API server, server version, namespace
+k8s-axi discover --kind deploy        # kinds the cluster serves, built-in and custom
+k8s-axi discover --group apps --full  # more columns
+k8s-axi version
+k8s-axi update                        # install the latest release, verifying its SHA-256 checksum
+```
+
+Global flags: `--context`, `--kubeconfig`, `-n/--namespace`, `--json`, `--yaml`, `--full`, `--limit`, `--timeout`.
+Each has a `K8S_AXI_<NAME>` environment variable, and `KUBECONFIG` keeps its standard meaning.
+`--context` selects a kubeconfig context for one command, and k8s-axi never changes the current context.
+It never prints Secret values, tokens or kubeconfig contents.
+Exec credential plugins named in the kubeconfig (for example `aws eks get-token`) are the only external programs it starts.
+
+A cached once-a-day update check prints a one-line notice on stderr.
+Set `K8S_AXI_NO_UPDATE_CHECK=1` to turn it off.
+
+## Agent setup
+
+```sh
+k8s-axi setup hooks          # add a session-start hook that runs 'cluster info'
+k8s-axi setup hooks --print  # show the settings fragment, write nothing
+k8s-axi setup skill          # install the agent skill
+```
+
+Both default to `$CLAUDE_CONFIG_DIR`, or `~/.claude`, and can be pointed elsewhere with `--settings` and `--dest`.
+
 ## Development
 
 ```sh

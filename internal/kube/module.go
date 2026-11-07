@@ -62,7 +62,7 @@ func (m Module) Register(root *cobra.Command) {
 		return bindEnv(cmd.Root().PersistentFlags())
 	}
 
-	root.AddCommand(g.clusterCmd(), g.discoverCmd())
+	root.AddCommand(g.clusterCmd(), g.discoverCmd(), g.setupCmd())
 }
 
 // bindEnv applies K8S_AXI_<FLAG> to every global flag the command line left
