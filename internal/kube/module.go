@@ -22,7 +22,10 @@ const (
 )
 
 // Module registers the global flags and the Kubernetes commands.
-type Module struct{}
+// The zero value loads clients from the kubeconfig.
+type Module struct {
+	load func(Options) (*Clients, error) // test seam
+}
 
 // globals holds the values of the persistent flags shared by all commands.
 type globals struct {
@@ -32,11 +35,21 @@ type globals struct {
 	full       bool
 	limit      int
 	timeout    time.Duration
+
+	load func(Options) (*Clients, error)
+}
+
+// clients resolves the kubeconfig context the global flags select.
+func (g *globals) clients() (*Clients, error) {
+	return g.load(Options{Kubeconfig: g.kubeconfig, Context: g.context, Namespace: g.namespace, Timeout: g.timeout})
 }
 
 // Register implements cli.Module.
-func (Module) Register(root *cobra.Command) {
-	g := &globals{}
+func (m Module) Register(root *cobra.Command) {
+	g := &globals{load: m.load}
+	if g.load == nil {
+		g.load = Load
+	}
 	pf := root.PersistentFlags()
 	pf.StringVar(&g.kubeconfig, "kubeconfig", "", "path to the kubeconfig file (default: $KUBECONFIG or ~/.kube/config)")
 	pf.StringVar(&g.context, "context", "", "kubeconfig context to use; the current context is never changed")
@@ -48,6 +61,8 @@ func (Module) Register(root *cobra.Command) {
 	root.PersistentPreRunE = func(cmd *cobra.Command, _ []string) error {
 		return bindEnv(cmd.Root().PersistentFlags())
 	}
+
+	root.AddCommand(g.clusterCmd(), g.discoverCmd())
 }
 
 // bindEnv applies K8S_AXI_<FLAG> to every global flag the command line left
