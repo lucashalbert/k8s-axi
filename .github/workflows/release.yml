@@ -35,6 +35,11 @@ jobs:
       - name: semantic-release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # The first slice reaches 0.0.1 only because its PR is squash-merged
+        # with a fix-typed title, e.g. "fix: add version, update, cluster info
+        # and discover commands". From the v0.0.0 baseline, unsquashed feat
+        # commits would release 0.1.0; the feat rule in .releaserc.json is
+        # intentional for later 0.1.x feature releases.
         # semantic-release computes the version and pushes the tag, then its
         # exec plugin runs goreleaser, which builds the archives and publishes
         # the GitHub Release (see .releaserc.json).

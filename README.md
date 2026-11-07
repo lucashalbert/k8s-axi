@@ -56,6 +56,7 @@ go test -tags integration ./...   # needs a reachable cluster, for example kind
 Releases are cut by semantic-release from conventional commits on `main`, and GoReleaser publishes the archives and `checksums.txt`.
 The project stays on `0.x`: a breaking change bumps the minor version until `1.0` is declared.
 Pull request titles must be conventional commits, and they become the squash-merge commit message.
+The first slice reaches `0.0.1` only when its PR is squash-merged with a `fix:` title; see [docs/release-process.md](docs/release-process.md).
 
 ## Compatibility
 
