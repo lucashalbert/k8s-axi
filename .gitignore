@@ -1,0 +1,16 @@
+# Binaries and test artifacts
+*.exe
+*.test
+*.out
+coverage.*
+
+# Dependency vendoring
+vendor/
+
+# Go workspace
+go.work
+go.work.sum
+
+# Build output
+/dist/
+/k8s-axi

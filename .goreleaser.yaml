@@ -1,0 +1,50 @@
+version: 2
+
+project_name: k8s-axi
+
+before:
+  hooks:
+    - go mod tidy -diff
+
+builds:
+  - id: k8s-axi
+    main: ./cmd/k8s-axi
+    binary: k8s-axi
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
+    ldflags:
+      - -s -w
+      - -X main.version={{ .Version }}
+      - -X main.commit={{ .Commit }}
+      - -X main.date={{ .Date }}
+
+# The SDK updater selects archives by OS and architecture tokens and
+# verifies them against a file named exactly checksums.txt.
+archives:
+  - id: k8s-axi
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - LICENSE
+      - README.md
+
+checksum:
+  name_template: checksums.txt
+  algorithm: sha256
+
+changelog:
+  filters:
+    exclude:
+      - "^(chore|docs|test|ci|style)(\\(.+\\))?:"
+
+release:
+  github:
+    owner: lucashalbert
+    name: k8s-axi
