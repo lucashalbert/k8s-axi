@@ -74,7 +74,7 @@ func (g *globals) discoverCmd() *cobra.Command {
 			}
 			out, err := discoverKinds(cmd.Context(), c, group, kind, g.limit, g.full)
 			if err != nil {
-				return axierr.Runtime("discover", "context/"+c.Context+" ("+c.Server+")", err,
+				return axierr.Runtime("discover", "context/"+c.Context+" ("+c.Server+")", redactedError(err),
 					"check that the API server is reachable and the credentials are valid, or raise --timeout ("+g.timeout.String()+")")
 			}
 			return output.Render(cmd.OutOrStdout(), out, f)
@@ -260,10 +260,10 @@ func discoveryWarnings(err error) []string {
 	if errors.As(err, &gdf) {
 		w := make([]string, 0, len(gdf.Groups))
 		for gv, e := range gdf.Groups {
-			w = append(w, fmt.Sprintf("%s unavailable: %v", gv, e))
+			w = append(w, fmt.Sprintf("%s unavailable: %v", gv, redactedError(e)))
 		}
 		sort.Strings(w)
 		return w
 	}
-	return []string{"discovery incomplete: " + err.Error()}
+	return []string{"discovery incomplete: " + redactURLUserinfo(err.Error())}
 }

@@ -70,7 +70,7 @@ func TestClusterInfoTOONDefault(t *testing.T) {
 func TestClusterInfoUnreachableIsRuntimeError(t *testing.T) {
 	c, fd := fakeClients()
 	fd.PrependReactor("get", "version", func(clienttesting.Action) (bool, runtimeObject, error) {
-		return true, nil, errors.New(`Get "https://127.0.0.1:6443/version": dial tcp 127.0.0.1:6443: connect: connection refused`)
+		return true, nil, errors.New(`Get "https://user:pw@127.0.0.1:6443/version": dial tcp 127.0.0.1:6443: connect: connection refused`)
 	})
 	root, out, errb := testRoot(t, c, nil)
 	root.SetArgs([]string{"cluster", "info"})
@@ -87,6 +87,9 @@ func TestClusterInfoUnreachableIsRuntimeError(t *testing.T) {
 	}
 	if strings.Contains(errb.String(), "goroutine") {
 		t.Error("stack trace in error output")
+	}
+	if strings.Contains(errb.String(), "user") || strings.Contains(errb.String(), "pw") {
+		t.Errorf("credentials leaked in error output:\n%s", errb)
 	}
 }
 

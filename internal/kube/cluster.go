@@ -38,7 +38,7 @@ func (g *globals) clusterInfo(cmd *cobra.Command) error {
 	}
 	v, err := c.Discovery.ServerVersion()
 	if err != nil {
-		return axierr.Runtime("cluster info", "context/"+c.Context+" ("+c.Server+")", err,
+		return axierr.Runtime("cluster info", "context/"+c.Context+" ("+c.Server+")", redactedError(err),
 			"check that the API server is reachable and the credentials are valid, or raise --timeout ("+g.timeout.String()+")")
 	}
 	return output.Render(cmd.OutOrStdout(), clusterInfoOut{

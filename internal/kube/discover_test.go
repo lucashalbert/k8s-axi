@@ -203,11 +203,33 @@ func TestDiscoverFullAddsShortNames(t *testing.T) {
 func TestDiscoverPartialFailureWarns(t *testing.T) {
 	c, fd := discoverFixture(t)
 	fd.PrependReactor("get", "resource", func(clienttesting.Action) (bool, runtime.Object, error) {
-		return true, nil, errors.New("metrics.k8s.io/v1beta1: the server is currently unable to handle the request")
+		return true, nil, errors.New(`metrics.k8s.io/v1beta1: Get "https://user:pw@127.0.0.1:6443/apis/metrics.k8s.io/v1beta1": the server is currently unable to handle the request`)
 	})
 	code, out, _, _ := runDiscover(t, c)
 	if code != 0 || len(kinds(out)) == 0 || out["warnings"] == nil {
 		t.Errorf("partial discovery: code=%d out=%v", code, out)
+	}
+	warnings := out["warnings"].([]any)
+	if got := warnings[0].(string); strings.Contains(got, "user") || strings.Contains(got, "pw") {
+		t.Errorf("credentials leaked in warning: %q", got)
+	}
+}
+
+func TestDiscoverRuntimeErrorRedactsURLUserinfo(t *testing.T) {
+	c, fd := discoverFixture(t)
+	fd.PrependReactor("get", "group", func(clienttesting.Action) (bool, runtime.Object, error) {
+		return true, nil, errors.New(`Get "https://user:pw@127.0.0.1:6443/api": dial tcp 127.0.0.1:6443: connect: connection refused`)
+	})
+	root, out, errb := testRoot(t, c, nil)
+	root.SetArgs([]string{"discover"})
+	if code := cli.Execute(root); code != 1 {
+		t.Fatalf("exit %d, want 1", code)
+	}
+	if out.Len() != 0 {
+		t.Errorf("stdout should be empty: %s", out)
+	}
+	if strings.Contains(errb.String(), "user") || strings.Contains(errb.String(), "pw") {
+		t.Errorf("credentials leaked in error output:\n%s", errb)
 	}
 }
 
