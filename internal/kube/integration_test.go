@@ -116,6 +116,69 @@ func TestDiscoverAgainstKind(t *testing.T) {
 	}
 }
 
+func TestDiscoverAgainstKindIncludesNonPreferredVersionOnlyResource(t *testing.T) {
+	t.Setenv("K8S_AXI_NO_UPDATE_CHECK", "1")
+	c, err := Load(Options{Timeout: 30 * time.Second})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	crds := c.Dynamic.Resource(crdGVR)
+	for _, crd := range []*unstructured.Unstructured{
+		integrationCRD("nonpreferred.example.com", "gadgets", "Gadget", "v1"),
+		integrationCRD("nonpreferred.example.com", "widgets", "Widget", "v1beta1"),
+	} {
+		name := crd.GetName()
+		if _, err := crds.Create(ctx, crd, metav1.CreateOptions{}); err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = crds.Delete(ctx, name, metav1.DeleteOptions{}) })
+	}
+
+	deadline := time.Now().Add(60 * time.Second)
+	for {
+		code, out, errOut := realRoot("discover", "--json", "--limit", "0", "--group", "nonpreferred.example.com")
+		if code != 0 {
+			t.Fatalf("exit %d: %s", code, errOut)
+		}
+		got := decode(t, out)
+		rows := map[string]map[string]any{}
+		for _, r := range got["kinds"].([]any) {
+			row := r.(map[string]any)
+			rows[row["kind"].(string)] = row
+		}
+		if widget := rows["Widget"]; widget != nil {
+			if widget["version"] != "v1beta1" || widget["group"] != "nonpreferred.example.com" || widget["crd"] != true {
+				t.Fatalf("Widget row: %v", widget)
+			}
+			if gadget := rows["Gadget"]; gadget == nil || gadget["version"] != "v1" {
+				t.Fatalf("Gadget row: %v", gadget)
+			}
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("Widget never showed up in non-preferred discovery version: %v", got)
+		}
+		time.Sleep(time.Second)
+	}
+}
+
+func integrationCRD(group, plural, kind, version string) *unstructured.Unstructured {
+	return &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "apiextensions.k8s.io/v1",
+		"kind":       "CustomResourceDefinition",
+		"metadata":   map[string]any{"name": plural + "." + group},
+		"spec": map[string]any{
+			"group": group, "scope": "Namespaced",
+			"names": map[string]any{"plural": plural, "singular": strings.TrimSuffix(plural, "s"), "kind": kind, "listKind": kind + "List"},
+			"versions": []any{map[string]any{
+				"name": version, "served": true, "storage": true,
+				"schema": map[string]any{"openAPIV3Schema": map[string]any{"type": "object"}},
+			}},
+		},
+	}}
+}
+
 func TestUnreachableServerIsBoundedRuntimeError(t *testing.T) {
 	t.Setenv("K8S_AXI_NO_UPDATE_CHECK", "1")
 	kc := filepath.Join(t.TempDir(), "kubeconfig")
