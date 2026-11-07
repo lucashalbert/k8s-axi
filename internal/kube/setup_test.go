@@ -10,6 +10,26 @@ import (
 	"github.com/lucashalbert/axi-sdk-go/cli"
 )
 
+const approvedSessionStartHook = "k8s-axi cluster info --timeout 5s"
+
+type setupResult struct {
+	Path    string `json:"path"`
+	Changed bool   `json:"changed"`
+	Message string `json:"message"`
+}
+
+type settingsDoc struct {
+	Hooks struct {
+		SessionStart []struct {
+			Hooks []struct {
+				Type    string `json:"type"`
+				Command string `json:"command"`
+			} `json:"hooks"`
+		} `json:"SessionStart"`
+	} `json:"hooks"`
+	Theme string `json:"theme,omitempty"`
+}
+
 func runSetup(t *testing.T, args ...string) (code int, stdout, stderr string) {
 	t.Helper()
 	root, out, errb := testRoot(t, nil, nil)
@@ -18,38 +38,63 @@ func runSetup(t *testing.T, args ...string) (code int, stdout, stderr string) {
 	return code, out.String(), errb.String()
 }
 
+func parseSetupResult(t *testing.T, out string) setupResult {
+	t.Helper()
+	var got setupResult
+	if err := json.Unmarshal([]byte(out), &got); err != nil {
+		t.Fatalf("setup output is not JSON: %v\n%s", err, out)
+	}
+	return got
+}
+
+func parseSettings(t *testing.T, b []byte) settingsDoc {
+	t.Helper()
+	var doc settingsDoc
+	if err := json.Unmarshal(b, &doc); err != nil {
+		t.Fatalf("settings are not JSON: %v\n%s", err, b)
+	}
+	return doc
+}
+
+func requireSessionStartHook(t *testing.T, doc settingsDoc) {
+	t.Helper()
+	if len(doc.Hooks.SessionStart) != 1 {
+		t.Fatalf("SessionStart hooks = %d, want 1", len(doc.Hooks.SessionStart))
+	}
+	hooks := doc.Hooks.SessionStart[0].Hooks
+	if len(hooks) != 1 {
+		t.Fatalf("SessionStart commands = %d, want 1", len(hooks))
+	}
+	if hooks[0].Type != "command" || hooks[0].Command != approvedSessionStartHook {
+		t.Fatalf("hook = (%q, %q), want (%q, %q)", hooks[0].Type, hooks[0].Command, "command", approvedSessionStartHook)
+	}
+}
+
 func TestSetupHooksIdempotent(t *testing.T) {
 	settings := filepath.Join(t.TempDir(), "claude", "settings.json")
-	if code, out, errOut := runSetup(t, "hooks", "--settings", settings, "--json"); code != 0 || !strings.Contains(out, `"changed":true`) {
+	code, out, errOut := runSetup(t, "hooks", "--settings", settings, "--json")
+	if code != 0 {
 		t.Fatalf("first run: exit %d out=%s err=%s", code, out, errOut)
+	}
+	if got := parseSetupResult(t, out); got.Path != settings || !got.Changed || got.Message != "hook added" {
+		t.Fatalf("first result = %+v, want path %q changed hook added", got, settings)
 	}
 	first, err := os.ReadFile(settings)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if code, out, _ := runSetup(t, "hooks", "--settings", settings, "--json"); code != 0 || !strings.Contains(out, `"changed":false`) {
+	code, out, _ = runSetup(t, "hooks", "--settings", settings, "--json")
+	if code != 0 {
 		t.Fatalf("second run: exit %d out=%s", code, out)
+	}
+	if got := parseSetupResult(t, out); got.Path != settings || got.Changed || got.Message != "hook already present" {
+		t.Fatalf("second result = %+v, want path %q unchanged hook already present", got, settings)
 	}
 	second, _ := os.ReadFile(settings)
 	if string(first) != string(second) {
 		t.Errorf("second run rewrote the file:\n%s\n---\n%s", first, second)
 	}
-	var doc struct {
-		Hooks struct {
-			SessionStart []struct {
-				Hooks []struct{ Type, Command string }
-			}
-		}
-	}
-	if err := json.Unmarshal(second, &doc); err != nil {
-		t.Fatal(err)
-	}
-	if len(doc.Hooks.SessionStart) != 1 || doc.Hooks.SessionStart[0].Hooks[0].Command != hookCommand {
-		t.Errorf("unexpected hooks: %s", second)
-	}
-	if !strings.HasPrefix(hookCommand, "k8s-axi cluster info") {
-		t.Errorf("hook command %q must run cluster info", hookCommand)
-	}
+	requireSessionStartHook(t, parseSettings(t, second))
 }
 
 func TestSetupHooksPreservesSettings(t *testing.T) {
@@ -61,18 +106,21 @@ func TestSetupHooksPreservesSettings(t *testing.T) {
 		t.Fatalf("exit %d: %s", code, errOut)
 	}
 	b, _ := os.ReadFile(settings)
-	if !strings.Contains(string(b), `"theme": "dark"`) {
-		t.Errorf("unrelated key lost: %s", b)
+	doc := parseSettings(t, b)
+	if doc.Theme != "dark" {
+		t.Errorf("theme = %q, want dark", doc.Theme)
 	}
+	requireSessionStartHook(t, doc)
 }
 
 func TestSetupHooksPrintWritesNothing(t *testing.T) {
 	dir := t.TempDir()
 	settings := filepath.Join(dir, "settings.json")
 	code, out, _ := runSetup(t, "hooks", "--print", "--settings", settings)
-	if code != 0 || !strings.Contains(out, "SessionStart") || !strings.Contains(out, hookCommand) {
+	if code != 0 {
 		t.Fatalf("exit %d out=%s", code, out)
 	}
+	requireSessionStartHook(t, parseSettings(t, []byte(out)))
 	if entries, _ := os.ReadDir(dir); len(entries) != 0 {
 		t.Errorf("--print wrote files: %v", entries)
 	}
