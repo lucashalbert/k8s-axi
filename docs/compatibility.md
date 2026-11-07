@@ -20,7 +20,7 @@ k8s-axi is built with `k8s.io/client-go` v0.37, which matches Kubernetes 1.37.
 Kubernetes supports clients within one minor version of the API server, so a client-go v0.37 is only formally supported against 1.36 to 1.38.
 k8s-axi widens that window by not depending on a fixed resource list:
 
-- Resources are found at run time through API discovery and the REST mapper.
+- Resources are found at run time through API discovery.
 - Built-in and custom resources are read through the dynamic client, so a kind that is new or removed on one side does not need a code change.
 - Only stable, long-lived API surfaces (`/version`, `/api`, `/apis` discovery) are used by the commands in this release.
 

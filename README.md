@@ -41,7 +41,9 @@ k8s-axi setup hooks --print  # show the settings fragment, write nothing
 k8s-axi setup skill          # install the agent skill
 ```
 
-Both default to `$CLAUDE_CONFIG_DIR`, or `~/.claude`, and can be pointed elsewhere with `--settings` and `--dest`.
+Hooks default to `$CLAUDE_CONFIG_DIR/settings.json`, or `~/.claude/settings.json`.
+The skill defaults to `$CLAUDE_CONFIG_DIR/skills/k8s-axi`, or `~/.claude/skills/k8s-axi`.
+Use `--settings` or `--dest` to point either command elsewhere.
 
 ## Development
 

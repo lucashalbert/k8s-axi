@@ -35,7 +35,7 @@ func (g *globals) setupCmd() *cobra.Command {
 		Use:   "hooks",
 		Short: "Add a session-start hook that runs 'cluster info'",
 		Long: "Add a SessionStart hook to the agent settings file so every session opens with the target cluster.\n" +
-			"The file defaults to settings.json in $CLAUDE_CONFIG_DIR, or ~/.claude. Unrelated settings are kept, and running it again changes nothing.\n" +
+			"The file defaults to $CLAUDE_CONFIG_DIR/settings.json, or ~/.claude/settings.json. Unrelated settings are kept, and running it again changes nothing.\n" +
 			"With --print, show the settings fragment and write nothing.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
