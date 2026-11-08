@@ -2,6 +2,7 @@ package kube
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -44,6 +45,9 @@ func (c *Clients) resolve(ctx context.Context, arg string) (Resource, error) {
 	for _, cand := range candidates(arg) {
 		gvk, err := mapper.KindForWithContext(ctx, cand)
 		if err != nil {
+			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+				return Resource{}, err
+			}
 			if meta.IsNoMatchError(err) {
 				continue
 			}
@@ -51,6 +55,9 @@ func (c *Clients) resolve(ctx context.Context, arg string) (Resource, error) {
 		}
 		m, err := mapper.RESTMappingWithContext(ctx, gvk.GroupKind(), gvk.Version)
 		if err != nil {
+			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+				return Resource{}, err
+			}
 			return Resource{}, ambiguous(arg, err)
 		}
 		return Resource{GVR: m.Resource, Kind: gvk.Kind, Namespaced: m.Scope.Name() == meta.RESTScopeNameNamespace}, nil

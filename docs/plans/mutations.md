@@ -44,7 +44,7 @@ k8s-axi plan rollout restart KIND/NAME [-n NS]
 - Requests are bounded: the whole command runs under `--timeout`, which also bounds each request.
 - Verbs are explicit: `get` and `update` on the `scale` subresource, `get` and `patch` on the workload.
 - `--json`, `--yaml` and `--full` behave as for the read commands.
-  The plan document comes first, then one result document, so JSON output is two objects in sequence.
+  The plan document comes first, then one result document, except a no-op prints only the plan, so JSON output is one or two objects in sequence.
 - Concurrency (PRD 6.8): scale sends the `resourceVersion` it read.
   That version is the workload's own, which controllers bump with every status write, so a conflict is retried (at most 3 times) against a fresh read while the replica count is still the one the plan was made from.
   If another writer changed the replica count, the plan is stale and the conflict is reported with a retry hint instead of overwriting their change.
@@ -96,6 +96,8 @@ result:
   note: ...
 next[2]: ...
 ```
+
+For a no-op, only the `plan` document is printed.
 
 Errors use the shared model: operation, target, message, hint.
 A conflict, a forbidden verb and an unsupported dry-run each get a specific hint.

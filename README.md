@@ -56,7 +56,7 @@ A requested state that already holds is printed as a no-op and sends nothing.
 These changes are not destructive, so they need no `--confirm` token.
 A namespaced target needs `-n` or a namespace set on the kubeconfig context, and a missing context is a usage error: a change is never sent to an assumed namespace or cluster.
 `--context` picks the cluster, the kubeconfig is only read, and the whole command is bounded by `--timeout`.
-Output is the plan document followed by a result document, so with `--json` or `--yaml` read a stream of two documents.
+Output is the plan document followed by a result document, except a no-op prints only the plan; with `--json` or `--yaml` read a stream of one or two documents.
 Scale retries a conflict while the replica count is still the one the plan was made from, and stops if another writer changed it.
 
 Every list states `count` and `truncated`, empty results say what was searched, and each result ends with next-step commands.

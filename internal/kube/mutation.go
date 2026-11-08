@@ -30,7 +30,7 @@ func (d *dryRunFlag) bind(cmd *cobra.Command) {
 
 func (d *dryRunFlag) mode(cmd *cobra.Command) (mutate.Mode, error) {
 	switch d.value {
-	case "", "none":
+	case "none":
 		return mutate.Apply, nil
 	case "server":
 		return mutate.DryRun, nil

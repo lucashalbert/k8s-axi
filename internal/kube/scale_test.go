@@ -1,11 +1,13 @@
 package kube
 
 import (
+	"context"
 	"strings"
 	"testing"
 	"time"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/discovery/cached/memory"
@@ -140,6 +142,7 @@ func TestScaleDryRunServer(t *testing.T) {
 func TestScaleUsageErrors(t *testing.T) {
 	cases := map[string][]string{
 		"client dry-run":      {"scale", "deploy/web", "--replicas", "2", "--dry-run=client", "-n", "default"},
+		"empty dry-run":       {"scale", "deploy/web", "--replicas", "2", "--dry-run=", "-n", "default"},
 		"bogus dry-run":       {"scale", "deploy/web", "--replicas", "2", "--dry-run=maybe", "-n", "default"},
 		"missing replicas":    {"scale", "deploy/web", "-n", "default"},
 		"negative replicas":   {"scale", "deploy/web", "--replicas", "-1", "-n", "default"},
@@ -246,11 +249,102 @@ func TestScaleSubresourceDiscoveryRespectsCommandTimeout(t *testing.T) {
 	}
 }
 
+func TestScaleResolveContextDeadlineIsRuntimeTimeout(t *testing.T) {
+	cases := []struct {
+		name string
+		m    deadlineRESTMapper
+	}{
+		{name: "kind", m: deadlineRESTMapper{failKind: true}},
+		{name: "mapping", m: deadlineRESTMapper{}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			e := scaleEnv(t)
+			e.c.Mapper = tc.m
+			code, out, errOut := run(t, e.c, "scale", "deploy/web", "--replicas", "5", "-n", "default")
+			if code != 1 || out != "" || !strings.Contains(errOut, "raise --timeout") || strings.Contains(errOut, "ambiguous") {
+				t.Fatalf("exit %d, stdout %q, stderr %s", code, out, errOut)
+			}
+		})
+	}
+}
+
 func blockDiscovery(c *Clients, delay time.Duration) {
 	c.Discovery.(*fakediscovery.FakeDiscovery).PrependReactor("get", "resource", func(clienttesting.Action) (bool, runtime.Object, error) {
 		time.Sleep(delay)
 		return false, nil, nil
 	})
+}
+
+type deadlineRESTMapper struct {
+	failKind bool
+}
+
+func (m deadlineRESTMapper) KindFor(schema.GroupVersionResource) (schema.GroupVersionKind, error) {
+	return m.KindForWithContext(context.Background(), schema.GroupVersionResource{})
+}
+
+func (m deadlineRESTMapper) KindForWithContext(context.Context, schema.GroupVersionResource) (schema.GroupVersionKind, error) {
+	if m.failKind {
+		return schema.GroupVersionKind{}, context.DeadlineExceeded
+	}
+	return schema.GroupVersionKind{Group: "apps", Version: "v1", Kind: "Deployment"}, nil
+}
+
+func (deadlineRESTMapper) RESTMapping(schema.GroupKind, ...string) (*meta.RESTMapping, error) {
+	return nil, context.DeadlineExceeded
+}
+
+func (deadlineRESTMapper) RESTMappingWithContext(context.Context, schema.GroupKind, ...string) (*meta.RESTMapping, error) {
+	return nil, context.DeadlineExceeded
+}
+
+func (m deadlineRESTMapper) KindsFor(resource schema.GroupVersionResource) ([]schema.GroupVersionKind, error) {
+	gvk, err := m.KindFor(resource)
+	if err != nil {
+		return nil, err
+	}
+	return []schema.GroupVersionKind{gvk}, nil
+}
+
+func (m deadlineRESTMapper) KindsForWithContext(ctx context.Context, resource schema.GroupVersionResource) ([]schema.GroupVersionKind, error) {
+	gvk, err := m.KindForWithContext(ctx, resource)
+	if err != nil {
+		return nil, err
+	}
+	return []schema.GroupVersionKind{gvk}, nil
+}
+
+func (deadlineRESTMapper) ResourceFor(schema.GroupVersionResource) (schema.GroupVersionResource, error) {
+	return schema.GroupVersionResource{}, context.DeadlineExceeded
+}
+
+func (deadlineRESTMapper) ResourceForWithContext(context.Context, schema.GroupVersionResource) (schema.GroupVersionResource, error) {
+	return schema.GroupVersionResource{}, context.DeadlineExceeded
+}
+
+func (deadlineRESTMapper) ResourcesFor(schema.GroupVersionResource) ([]schema.GroupVersionResource, error) {
+	return nil, context.DeadlineExceeded
+}
+
+func (deadlineRESTMapper) ResourcesForWithContext(context.Context, schema.GroupVersionResource) ([]schema.GroupVersionResource, error) {
+	return nil, context.DeadlineExceeded
+}
+
+func (deadlineRESTMapper) RESTMappings(schema.GroupKind, ...string) ([]*meta.RESTMapping, error) {
+	return nil, context.DeadlineExceeded
+}
+
+func (deadlineRESTMapper) RESTMappingsWithContext(context.Context, schema.GroupKind, ...string) ([]*meta.RESTMapping, error) {
+	return nil, context.DeadlineExceeded
+}
+
+func (deadlineRESTMapper) ResourceSingularizer(string) (string, error) {
+	return "", context.DeadlineExceeded
+}
+
+func (deadlineRESTMapper) ResourceSingularizerWithContext(context.Context, string) (string, error) {
+	return "", context.DeadlineExceeded
 }
 
 // A controller writes the workload's status all the time, which changes its

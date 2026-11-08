@@ -146,6 +146,7 @@ func TestRestartRefusals(t *testing.T) {
 		"replicaset":       {[]string{"rollout", "restart", "rs/rs", "-n", "default"}, 2},
 		"pod":              {[]string{"rollout", "restart", "pod/x", "-n", "default"}, 2},
 		"client dry-run":   {[]string{"rollout", "restart", "deploy/web", "--dry-run=client", "-n", "default"}, 2},
+		"empty dry-run":    {[]string{"rollout", "restart", "deploy/web", "--dry-run=", "-n", "default"}, 2},
 		"no namespace":     {[]string{"rollout", "restart", "deploy/web"}, 2},
 		"no name":          {[]string{"rollout", "restart", "deploy", "-n", "default"}, 2},
 		"missing workload": {[]string{"rollout", "restart", "deploy/nope", "-n", "default"}, 1},
