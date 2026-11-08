@@ -229,6 +229,7 @@ func TestDeleteNeedsTheExactToken(t *testing.T) {
 	kc := itKubeconfig(t, c, "")
 	before, _ := os.ReadFile(kc)
 	itDeployment(t, c, ns, "web", 1)
+	itDeployment(t, c, ns, "other", 1)
 	exists := func(name string) bool {
 		_, err := c.Typed.AppsV1().Deployments(ns).Get(context.Background(), name, metav1.GetOptions{})
 		return err == nil
@@ -271,6 +272,9 @@ func TestDeleteNeedsTheExactToken(t *testing.T) {
 		t.Errorf("status = %v", status)
 	}
 	eventually(t, "the deployment to be gone", 60*time.Second, func() bool { return !exists("web") })
+	if !exists("other") {
+		t.Error("delete removed deployment/other")
+	}
 	itKubeconfigUnchanged(t, kc, before)
 }
 

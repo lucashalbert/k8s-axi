@@ -162,6 +162,15 @@ func TestDeleteWithTheRightToken(t *testing.T) {
 	if e.has(deployGVR, "default", "web") {
 		t.Error("the deployment is still there")
 	}
+	if !e.has(deployGVR, "default", "stuck") {
+		t.Error("delete removed deployment/stuck")
+	}
+	if !e.has(nsGVR, "", "team") {
+		t.Error("delete removed namespace/team")
+	}
+	if !e.has(crdGVR, "", "gadgets.example.com") {
+		t.Error("delete removed customresourcedefinition/gadgets.example.com")
+	}
 	calls := e.realDeletes()
 	if len(calls) != 1 || calls[0].policy != metav1.DeletePropagationBackground || calls[0].uid != "uid-web" {
 		t.Errorf("deletes = %+v, want background with the UID precondition", calls)
