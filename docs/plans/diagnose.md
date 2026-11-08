@@ -144,7 +144,7 @@ Empty `findings` is stated (`count: 0`) with the `checked` list.
 
 ## Package layout
 
-New files in `internal/kube`; the only edit to existing code is adding `g.diagnoseCmd()` to the command list in `module.go`.
+Core diagnose code lives in new `internal/kube/diagnose*` files, with existing wiring updated to register the command and cover it in shared fixtures and integration coverage.
 
 | File | Content |
 |---|---|
