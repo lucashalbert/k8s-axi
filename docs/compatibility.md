@@ -29,6 +29,9 @@ k8s-axi widens that window by not depending on a fixed resource list:
 
 The kind matrix runs `get`, `inspect`, `events` and `logs` against every minor, including a CRD served in a non-preferred version, a Secret whose value must never appear in any output format, credential redaction in logs, `--previous` logs of a restarted container, and the structured error for a service account without permissions.
 
+The mutation tests add, on every minor: `scale` of a deployment (up, to zero, no-op), of a statefulset and of a custom resource that declares a scale subresource, `--dry-run=server` and `plan` leaving the object untouched, `rollout restart` replacing a deployment's pod and annotating a statefulset and a daemonset, a service account that may only read getting the structured `RBAC denied` error for each mutation, and the kubeconfig and its current context staying byte-for-byte unchanged.
+Mutations use only the `scale` subresource, a JSON merge patch of one pod template annotation, and `dryRun=All`, all stable in the supported range.
+
 Every supported minor is exercised by the kind matrix, so a regression against 1.33 to 1.35 is caught in CI rather than assumed away.
 Clusters outside the five supported minors may work but are not tested.
 
