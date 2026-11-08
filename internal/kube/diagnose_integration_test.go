@@ -120,6 +120,7 @@ func TestDiagnoseCrashLoopAndFailedJob(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	waitForPodLogLine(t, c, ns, "crasher", "app", true, 180*time.Second, "boom-line")
 	m := diagUntil(t, "the crash loop with its previous log", 240*time.Second, []string{"pod", "crasher", "-n", ns},
 		func(m map[string]any) bool { return ruleOf(m, "crash-loop") != nil && len(rowsOf(m, "logs")) == 1 })
 	f := ruleOf(m, "crash-loop")
