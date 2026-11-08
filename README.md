@@ -78,7 +78,7 @@ A field owned by another manager is a `conflict` line in the plan and fails that
 Objects are independent: every changed object is attempted, each gets its own status in the result (`created`, `configured`, `unchanged`, `failed`, or `would-create` and `would-configure` in a dry run), and any failure makes the exit code 1.
 `metadata.managedFields` in a manifest (for example from `kubectl get -o yaml`) is dropped.
 
-These are usage errors (exit 2) that stop before anything is sent: a document that does not parse, an object without `apiVersion`, `kind` or `metadata.name` (`generateName` alone is not enough), the same object twice, a kind the cluster does not serve and the manifest does not create, and an ambiguous or disagreeing namespace.
+These are usage errors (exit 2) that stop before anything is sent: a document that does not parse, an object without `apiVersion`, `kind` or `metadata.name` (`generateName` alone is not enough), the same object twice, a kind and version the cluster does not serve and the manifest does not create a CRD that serves it, and an ambiguous or disagreeing namespace.
 A namespaced object takes the namespace from its manifest, else from `-n`, else from the kubeconfig context; an object whose namespace differs from `-n` is refused, and falling back to `default` is never done.
 Cluster-scoped objects ignore `-n`.
 
