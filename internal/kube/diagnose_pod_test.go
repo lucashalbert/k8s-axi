@@ -61,26 +61,32 @@ func TestPodImagePull(t *testing.T) {
 }
 
 func TestPodCrashLoopWithLastTermination(t *testing.T) {
-	p := podFix(t, "web", `
+	cases := map[string]string{
+		"backoff":    `state: {waiting: {reason: CrashLoopBackOff, message: back-off 5m0s restarting failed container}}`,
+		"restarting": `state: {waiting: {reason: ContainerCreating}}`,
+	}
+	for name, state := range cases {
+		p := podFix(t, "web", `
   phase: Running
   containerStatuses:
   - name: app
     ready: false
     restartCount: 7
-    state: {waiting: {reason: CrashLoopBackOff, message: back-off 5m0s restarting failed container}}
+    `+state+`
     lastState: {terminated: {reason: Error, exitCode: 1, finishedAt: "2026-11-07T11:57:00Z"}}`)
-	fs := podFindingsOf(t, p)
-	got := find(fs, "crash-loop")
-	if got == nil || got.Severity != sevCritical || got.Basis != basisObserved {
-		t.Fatalf("crash-loop = %+v", got)
-	}
-	for _, want := range []string{"restarts: 7", "last termination: Error, exit code 1, 3m ago"} {
-		if !hasEvidence(got, want) {
-			t.Errorf("evidence %v lacks %q", got.Evidence, want)
+		fs := podFindingsOf(t, p)
+		got := find(fs, "crash-loop")
+		if got == nil || got.Severity != sevCritical || got.Basis != basisObserved {
+			t.Fatalf("%s: crash-loop = %+v", name, got)
 		}
-	}
-	if find(fs, "oom-killed") != nil || find(fs, "restarts") != nil {
-		t.Errorf("unexpected extra findings: %v", ruleSet(fs))
+		for _, want := range []string{"restarts: 7", "last termination: Error, exit code 1, 3m ago"} {
+			if !hasEvidence(got, want) {
+				t.Errorf("%s: evidence %v lacks %q", name, got.Evidence, want)
+			}
+		}
+		if find(fs, "oom-killed") != nil || find(fs, "restarts") != nil {
+			t.Errorf("%s: unexpected extra findings: %v", name, ruleSet(fs))
+		}
 	}
 }
 
