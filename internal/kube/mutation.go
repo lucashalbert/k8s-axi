@@ -201,7 +201,7 @@ func dryRunUnsupported(err error) bool {
 
 // mutationCmds are the commands that change the cluster.
 func (g *globals) mutationCmds() []*cobra.Command {
-	return []*cobra.Command{g.scaleCmd(false)}
+	return []*cobra.Command{g.scaleCmd(false), g.rolloutCmd(false)}
 }
 
 // dryRunAll are the options of a server-side dry run.
