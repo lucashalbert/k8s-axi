@@ -25,6 +25,9 @@ k8s-axi get deploy -A -l app=web      # all namespaces, label selector (also --f
 k8s-axi inspect pod web-6d5f8         # key facts, conditions, owner chain, newest events
 k8s-axi events -n prod --type Warning # newest first; add pod/web-6d5f8 for one object
 k8s-axi logs deploy/web --since 15m   # bounded, redacted; -c, --previous, --tail, -l
+k8s-axi plan scale deploy/web --replicas 0 -n prod   # preview, changes nothing
+k8s-axi scale deploy/web --replicas 5 -n prod        # also --dry-run=server
+k8s-axi rollout restart sts/db -n prod               # deployments, statefulsets, daemonsets
 k8s-axi version
 k8s-axi update                        # install the latest release, verifying its SHA-256 checksum
 ```
@@ -39,6 +42,22 @@ Read commands:
   `--labels` and `--annotations` add those maps.
 - `events [KIND NAME]` shows events for a namespace (`-A` for all) or one object, newest first, with a warning count.
 - `logs [TARGET]` reads a pod, or the pods of a deployment, statefulset, daemonset, replicaset or job (`KIND/NAME`), or pods chosen with `-l`.
+
+Mutating commands:
+
+- `scale KIND/NAME --replicas N` sets the replica count through the scale subresource, found by discovery, so deployments, statefulsets, replicasets and custom resources that declare one all work.
+- `rollout restart KIND/NAME` restarts a deployment, statefulset or daemonset by setting the `kubectl.kubernetes.io/restartedAt` annotation on its pod template.
+- `plan scale ...` and `plan rollout restart ...` describe the effect of either without changing anything, and end with the exact command that applies it.
+
+Each mutation prints its plan first: operation, target, `scope` (context, API server, namespace, resource) and the change, for example `replicas 3 -> 0`.
+Scaling to zero, a `Recreate` deployment, an `OnDelete` update strategy and a restart with no running pods are called out as `notable:` lines.
+A requested state that already holds is printed as a no-op and sends nothing.
+`--dry-run=server` (and `plan`) send the real request with `dryRun=All`, so the API server validates it and admission runs; `--dry-run=client` is refused because it validates nothing.
+These changes are not destructive, so they need no `--confirm` token.
+A namespaced target needs `-n` or a namespace set on the kubeconfig context, and a missing context is a usage error: a change is never sent to an assumed namespace or cluster.
+`--context` picks the cluster, the kubeconfig is only read, and the whole command is bounded by `--timeout`.
+Output is the plan document followed by a result document, except a no-op prints only the plan; with `--json` or `--yaml` read a stream of one or two documents.
+Scale retries a conflict while the replica count is still the one the plan was made from, and stops if another writer changed it.
 
 Every list states `count` and `truncated`, empty results say what was searched, and each result ends with next-step commands.
 Lists are cut at `--limit` rows (default 50, `0` for no limit), events are read up to 1000 per call, and logs are bounded by `--tail` (default 100 lines per container) and `--max-bytes` (default 64 KiB in total) over at most 5 pods.
