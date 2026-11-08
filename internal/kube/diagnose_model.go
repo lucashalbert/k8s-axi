@@ -205,7 +205,6 @@ func (s *snapshot) run() []finding {
 	}
 	if s.Resource.GVR.Resource != "pods" && s.Resource.GVR.Resource != "services" {
 		out = append(out, s.controllerEventRules()...)
-		out = append(out, s.quotaRules()...)
 	}
 	return append(out, s.nodeRules()...)
 }
