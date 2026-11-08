@@ -72,7 +72,13 @@ func runBin(t *testing.T, bin string, env []string, args ...string) (int, string
 	t.Helper()
 	home := t.TempDir()
 	cmd := exec.Command(bin, args...)
-	cmd.Env = append([]string{"PATH=" + os.Getenv("PATH"), "HOME=" + home, "XDG_CACHE_HOME=" + home, "LocalAppData=" + home, "USERPROFILE=" + home}, env...)
+	base := []string{"PATH=" + os.Getenv("PATH"), "HOME=" + home, "XDG_CACHE_HOME=" + home, "LocalAppData=" + home, "USERPROFILE=" + home}
+	for _, k := range []string{"SystemRoot", "TMP", "TEMP", "TMPDIR"} { // Windows networking and temp files need these
+		if v := os.Getenv(k); v != "" {
+			base = append(base, k+"="+v)
+		}
+	}
+	cmd.Env = append(base, env...)
 	var out, errb bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &errb
 	err := cmd.Run()
