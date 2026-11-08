@@ -91,16 +91,21 @@ func (s *snapshot) selectorMismatch(subject string) []finding {
 		p := &s.NSPods[i]
 		lbls := labels.Set(p.GetLabels())
 		matched := 0
+		overlapped := 0
 		var diffs []string
 		for _, k := range sortedKeys(sel) {
 			switch v, ok := lbls[k]; {
 			case ok && v == sel[k]:
 				matched++
+				overlapped++
 			case ok:
+				overlapped++
 				diffs = append(diffs, fmt.Sprintf("%s=%s (selector wants %s=%s)", k, v, k, sel[k]))
+			default:
+				diffs = append(diffs, fmt.Sprintf("missing %s (selector wants %s=%s)", k, k, sel[k]))
 			}
 		}
-		if len(diffs) == 0 {
+		if overlapped == 0 || len(diffs) == 0 {
 			continue // shares no key it differs on: unrelated, or a full match
 		}
 		cands = append(cands, near{p.GetName(), matched, fmt.Sprintf("pod %s has %s", p.GetName(), strings.Join(diffs, ", "))})
