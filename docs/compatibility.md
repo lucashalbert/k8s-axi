@@ -64,7 +64,7 @@ K8S_AXI_EXPECT_MINOR=1.37 go test -tags integration -count=1 ./...
 ```
 
 The tests use the current context of the default kubeconfig, create their own namespaces and delete them afterwards.
-A full run takes about two minutes on a laptop.
+A full run takes a few minutes.
 
 ## Updating the matrix
 

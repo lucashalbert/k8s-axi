@@ -10,6 +10,8 @@ import (
 
 	"github.com/lucashalbert/axi-sdk-go/cli"
 	"github.com/lucashalbert/axi-sdk-go/update"
+
+	"github.com/lucashalbert/k8s-axi/skills"
 )
 
 // smokePaths is every runnable command. The kind matrix runs one smoke test
@@ -44,5 +46,22 @@ func TestSmokeListCoversEveryCommand(t *testing.T) {
 	sort.Strings(want)
 	if !slices.Equal(got, want) {
 		t.Fatalf("smokePaths and the command tree differ:\n tree:  %v\n smoke: %v", got, want)
+	}
+}
+
+// The embedded skill points an agent at every command, so it cannot lag
+// behind the command tree.
+func TestSkillNamesEveryCommand(t *testing.T) {
+	b, err := skills.FS.ReadFile("k8s-axi/SKILL.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range smokePaths {
+		if strings.HasPrefix(p, "plan ") {
+			continue // covered by 'plan'
+		}
+		if !strings.Contains(string(b), "`k8s-axi "+p) {
+			t.Errorf("SKILL.md does not mention `k8s-axi %s`", p)
+		}
 	}
 }
