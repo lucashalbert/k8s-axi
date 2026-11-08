@@ -102,7 +102,7 @@ func readManifestFile(f string, stdin io.Reader, budget *int) ([]byte, string, e
 	if f == "-" {
 		name = "stdin"
 	} else {
-		fh, err := os.Open(f)
+		fh, err := os.Open(f) //nolint:gosec // the path is the -f argument the user chose
 		if err != nil {
 			return nil, "", axierr.Runtime("apply", f, err, "check that the file is readable")
 		}
