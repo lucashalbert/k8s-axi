@@ -33,4 +33,6 @@ Get the current source of truth from the CLI:
 - `k8s-axi rollout restart --help` to restart a deployment, statefulset or daemonset
 - `k8s-axi apply --help` to create or update objects from manifests with server-side apply
 - `k8s-axi delete --help` to delete one named object with an exact confirm token
+- `k8s-axi setup hooks --help` and `k8s-axi setup skill --help` to wire k8s-axi into the agent
+- `k8s-axi version` for the installed version, and `k8s-axi update --help` to install the latest release
 - `k8s-axi <command> --help` for any command's flags

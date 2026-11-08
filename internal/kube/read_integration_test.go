@@ -37,7 +37,7 @@ func itSetup(t *testing.T) (*Clients, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ns := strings.ToLower(fmt.Sprintf("k8s-axi-it-%s-%d", strings.NewReplacer("/", "-", "_", "-").Replace(t.Name()), time.Now().UnixNano()%100000))
+	ns := strings.ToLower(fmt.Sprintf("k8s-axi-it-%s-%d", strings.NewReplacer("/", "-", "_", "-").Replace(t.Name()), time.Now().UnixMilli()%1000000))
 	if len(ns) > 63 {
 		ns = ns[:63]
 	}
@@ -82,13 +82,15 @@ func waitForPodLogLine(t *testing.T, c *Clients, ns, pod, container string, prev
 
 func waitForRestartedPod(t *testing.T, ns, pod string, within time.Duration) {
 	t.Helper()
-	eventually(t, "pod "+pod+" to show a crash-loop backoff", within, func() bool {
+	// Newer kubelets restart a crashing container sooner, so between restarts the
+	// status can read Error instead of CrashLoopBackOff on any given poll.
+	eventually(t, "pod "+pod+" to have restarted after a crash", within, func() bool {
 		m := itTry("get", "pods", pod, "-n", ns)
 		if m == nil {
 			return false
 		}
 		rows := rowsOf(m, "items")
-		return len(rows) == 1 && rows[0]["restarts"].(float64) >= 1 && rows[0]["status"] == "CrashLoopBackOff"
+		return len(rows) == 1 && rows[0]["restarts"].(float64) >= 1 && (rows[0]["status"] == "CrashLoopBackOff" || rows[0]["status"] == "Error")
 	})
 }
 

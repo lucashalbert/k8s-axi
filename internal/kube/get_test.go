@@ -22,7 +22,7 @@ import (
 var fixedNow = time.Date(2026, 11, 7, 12, 0, 0, 0, time.UTC)
 
 // freezeTime pins the clock the age columns read.
-func freezeTime(t *testing.T) {
+func freezeTime(t testing.TB) {
 	t.Helper()
 	old := now
 	now = func() time.Time { return fixedNow }

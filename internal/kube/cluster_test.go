@@ -18,7 +18,7 @@ import (
 )
 
 // testRoot builds the real command tree around fake clients.
-func testRoot(t *testing.T, c *Clients, loadErr error) (root *cobra.Command, stdout, stderr *bytes.Buffer) {
+func testRoot(t testing.TB, c *Clients, loadErr error) (root *cobra.Command, stdout, stderr *bytes.Buffer) {
 	t.Helper()
 	t.Setenv("K8S_AXI_NO_UPDATE_CHECK", "1")
 	m := Module{load: func(o Options) (*Clients, error) {

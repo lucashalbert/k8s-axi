@@ -96,7 +96,9 @@ Deleting a Namespace or a CustomResourceDefinition adds a `WARNING:` line to the
 `--dry-run=server` needs no token and deletes nothing.
 
 Every list states `count` and `truncated`, empty results say what was searched, and each result ends with next-step commands.
-Lists are cut at `--limit` rows (default 50, `0` for no limit), events are read up to 1000 per call, and logs are bounded by `--tail` (default 100 lines per container) and `--max-bytes` (default 64 KiB in total) over at most 5 pods.
+Lists are cut at `--limit` rows (default 50, `0` for no limit), events are read up to 1000 per call, and logs are bounded by `--tail` (default 100 lines per container) and `--max-bytes` (default 64 KiB in total) over at most 5 pods, picked by name from at most 2000 pods that match.
+`get --limit 0` reads the list in chunks of 500, and `discover` reads CRDs in pages of 100.
+The budgets are in [docs/performance.md](docs/performance.md).
 `--full` prints complete objects.
 
 Secret values are never printed, and there is no flag that reveals them: `get` and `inspect` show a Secret's type and key names with sizes only, also with `--full`, `--json` and `--yaml`.
@@ -149,6 +151,7 @@ Use `--settings` or `--dest` to point either command elsewhere.
 go vet ./...
 go test -race ./...
 go test -tags integration ./...   # needs a reachable cluster, for example kind
+go test ./internal/kube -run '^$' -bench .   # benchmarks, informational
 ```
 
 ## Releases
@@ -157,6 +160,13 @@ Releases are cut by semantic-release from conventional commits on `main`, and Go
 The project stays on `0.x`: a breaking change bumps the minor version until `1.0` is declared.
 Pull request titles must be conventional commits, and they become the squash-merge commit message.
 The first slice reaches `0.0.1` only when its PR is squash-merged with a `fix:` title; see [docs/release-process.md](docs/release-process.md).
+
+## Documentation
+
+- [docs/usage.md](docs/usage.md): a short guide, from "which cluster am I on" to a safe change.
+- [docs/compatibility.md](docs/compatibility.md): supported Kubernetes versions, client-go skew, per-version differences.
+- [docs/performance.md](docs/performance.md): resource budgets and benchmarks.
+- [docs/design.md](docs/design.md): the design.
 
 ## Compatibility
 

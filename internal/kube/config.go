@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/discovery/cached/memory"
@@ -18,9 +19,17 @@ import (
 	"k8s.io/client-go/restmapper"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/clientcmd/api"
+	"k8s.io/klog/v2"
 
 	"github.com/lucashalbert/axi-sdk-go/axierr"
 )
+
+// client-go logs through klog to stderr, outside the structured error model
+// and with the server URL in it. Every failure reaches the caller as an
+// error, so the log lines are dropped.
+func init() {
+	klog.SetLogger(logr.Discard())
+}
 
 // Options select the cluster a command talks to.
 type Options struct {

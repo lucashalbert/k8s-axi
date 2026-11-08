@@ -45,20 +45,14 @@ func (c *Clients) resolve(ctx context.Context, arg string) (Resource, error) {
 	for _, cand := range candidates(arg) {
 		gvk, err := mapper.KindForWithContext(ctx, cand)
 		if err != nil {
-			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-				return Resource{}, err
-			}
 			if meta.IsNoMatchError(err) {
 				continue
 			}
-			return Resource{}, ambiguous(arg, err)
+			return Resource{}, c.resolveError(arg, err)
 		}
 		m, err := mapper.RESTMappingWithContext(ctx, gvk.GroupKind(), gvk.Version)
 		if err != nil {
-			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-				return Resource{}, err
-			}
-			return Resource{}, ambiguous(arg, err)
+			return Resource{}, c.resolveError(arg, err)
 		}
 		return Resource{GVR: m.Resource, Kind: gvk.Kind, Namespaced: m.Scope.Name() == meta.RESTScopeNameNamespace}, nil
 	}
@@ -80,9 +74,18 @@ func candidates(arg string) []schema.GroupVersionResource {
 	return append(out, gr.WithVersion(""))
 }
 
-func ambiguous(arg string, err error) error {
-	return axierr.Usage("resolve kind", fmt.Sprintf("%q is ambiguous: %v", arg, err),
-		"qualify it with an API group, for example "+arg+".<group>")
+// resolveError classifies a failed lookup: a cancelled context passes
+// through, an ambiguous kind is a usage error, and anything else means
+// discovery could not reach the API server.
+func (c *Clients) resolveError(arg string, err error) error {
+	switch {
+	case errors.Is(err, context.Canceled):
+		return err
+	case meta.IsAmbiguousError(err):
+		return axierr.Usage("resolve kind", fmt.Sprintf("%q is ambiguous: %v", arg, err),
+			"qualify it with an API group, for example "+arg+".<group>")
+	}
+	return apiError("resolve kind", "context/"+c.Context+" ("+c.Server+")", err, "get", "discovery")
 }
 
 // splitTarget reads "KIND NAME", "KIND/NAME" or "KIND" (name empty). KIND may

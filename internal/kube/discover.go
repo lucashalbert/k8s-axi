@@ -180,17 +180,23 @@ func discoverKinds(ctx context.Context, c *Clients, group, kind string, limit in
 // "apiextensions" when the cluster answered and "heuristic" when listing CRDs
 // is not allowed, in which case isCRD guesses from the group name.
 func customResources(ctx context.Context, dyn dynamic.Interface) (map[string]bool, string) {
-	list, err := dyn.Resource(crdGVR).List(ctx, metav1.ListOptions{})
-	if err != nil {
-		return nil, "heuristic"
+	set := map[string]bool{}
+	o := metav1.ListOptions{Limit: crdChunk}
+	for {
+		list, err := dyn.Resource(crdGVR).List(ctx, o)
+		if err != nil {
+			return nil, "heuristic"
+		}
+		for i := range list.Items {
+			grp, _, _ := unstructured.NestedString(list.Items[i].Object, "spec", "group")
+			plural, _, _ := unstructured.NestedString(list.Items[i].Object, "spec", "names", "plural")
+			set[grp+"/"+plural] = true
+		}
+		if list.GetContinue() == "" {
+			return set, "apiextensions"
+		}
+		o.Continue = list.GetContinue()
 	}
-	set := make(map[string]bool, len(list.Items))
-	for i := range list.Items {
-		grp, _, _ := unstructured.NestedString(list.Items[i].Object, "spec", "group")
-		plural, _, _ := unstructured.NestedString(list.Items[i].Object, "spec", "names", "plural")
-		set[grp+"/"+plural] = true
-	}
-	return set, "apiextensions"
 }
 
 func isCRD(source string, crds map[string]bool, group, resource string) bool {

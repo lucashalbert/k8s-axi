@@ -19,7 +19,7 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
-func typed[T any](t *testing.T, y string) *T {
+func typed[T any](t testing.TB, y string) *T {
 	t.Helper()
 	var v T
 	if err := yaml.UnmarshalStrict([]byte(y), &v); err != nil {
@@ -201,7 +201,7 @@ func TestDiagnoseForbiddenEventsIsAGap(t *testing.T) {
 	}
 }
 
-func crashLoopPod(t *testing.T, name, container string) *corev1.Pod {
+func crashLoopPod(t testing.TB, name, container string) *corev1.Pod {
 	return typed[corev1.Pod](t, `
 apiVersion: v1
 kind: Pod
@@ -219,7 +219,7 @@ status:
     lastState: {terminated: {reason: Error, exitCode: 1, finishedAt: "2026-11-07T11:57:00Z"}}`)
 }
 
-func stubDiagLogs(t *testing.T, fn func(ctx context.Context, pod, container string, previous bool) (string, error)) {
+func stubDiagLogs(t testing.TB, fn func(ctx context.Context, pod, container string, previous bool) (string, error)) {
 	t.Helper()
 	old := podLog
 	podLog = func(ctx context.Context, _ *Clients, _, pod string, o *corev1.PodLogOptions) (io.ReadCloser, error) {

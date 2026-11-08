@@ -27,7 +27,9 @@ k8s-axi widens that window by not depending on a fixed resource list:
 - Everything else, including every CRD, goes through the dynamic client.
 - The commands use stable surfaces only: `/version`, `/api` and `/apis` discovery, list and get, pod logs, and core events.
 
-The kind matrix runs `get`, `inspect`, `events`, `logs` and `diagnose` against every minor, including a CRD served in a non-preferred version, a Secret whose value must never appear in any output format, credential redaction in logs, `--previous` logs of a restarted container, and the structured error for a service account without permissions.
+The kind matrix first runs one smoke test per command against every minor (`TestSmokeEveryCommandAgainstKind`: `version`, `update --help`, `cluster info`, `discover`, `get`, `inspect`, `events`, `logs`, `diagnose`, `plan` for scale, rollout restart, apply and delete, `scale`, `rollout restart`, `apply`, `delete`, `setup hooks` and `setup skill`).
+`TestSmokeListCoversEveryCommand` fails when a command exists that the smoke list does not name, so a new command cannot skip the matrix.
+The deeper tests then run `get`, `inspect`, `events`, `logs` and `diagnose` against every minor, including a CRD served in a non-preferred version, a Secret whose value must never appear in any output format, credential redaction in logs, `--previous` logs of a restarted container, and the structured error for a service account without permissions.
 
 `diagnose` is exercised against a pod that cannot pull its image, an unschedulable pod, a crash loop with its previous log, a failed Job, a failing readiness probe, services with a selector typo and with no ready endpoints, a Deployment over a ResourceQuota, and healthy workloads of every supported kind.
 Its rules read documented status fields and conditions, plus the wording of a few scheduler, kubelet and controller messages, so a change in that wording only costs an inferred cause finding and never the observed finding next to it.
@@ -40,6 +42,30 @@ Mutations use only the `scale` subresource, a JSON merge patch of one pod templa
 Every supported minor is exercised by the kind matrix, so a regression against 1.33 to 1.35 is caught in CI rather than assumed away.
 Clusters outside the five supported minors may work but are not tested.
 
+## Known per-version differences
+
+- **Crash loops.**
+  Newer kubelets restart a crashing container sooner (the crash-loop back-off decays faster), so between restarts a pod's status column often reads `Error` and rarely `CrashLoopBackOff`, and which one a poll sees depends on timing.
+  `diagnose` already reads the last termination and the restart count rather than the waiting reason, and the integration tests accept both.
+- **Aggregated discovery** (GA in 1.30) lets `discover` and kind resolution use two requests.
+  Every supported minor serves it, and the API server falls back to per-group requests when an aggregated API server does not.
+- **Event shape.**
+  `events` reads core `v1` events on every minor.
+  The `events.k8s.io` API is not used, because its fields differ between releases.
+- **Node images.**
+  kind v0.33.0 only publishes node images for 1.34 and newer, so the 1.33 row uses the image from kind v0.32.0.
+  Local runs need a kind release that writes the kubeadm configuration the node expects: kind v0.29 cannot start a 1.37 node.
+
+## Running the matrix locally
+
+```sh
+kind create cluster --name k8s-axi --image <pinned image from the table>
+K8S_AXI_EXPECT_MINOR=1.37 go test -tags integration -count=1 ./...
+```
+
+The tests use the current context of the default kubeconfig, create their own namespaces and delete them afterwards.
+A full run takes a few minutes.
+
 ## Updating the matrix
 
 When a new Kubernetes minor ships:
@@ -47,3 +73,5 @@ When a new Kubernetes minor ships:
 1. Add its kind node image, pinned by digest, to `.github/workflows/integration.yml` and drop the oldest minor.
 2. Update the table above and the client-go version in `go.mod`.
 3. Record the date the list was resolved.
+4. Run the matrix.
+   A test that fails on one minor only is a per-version difference: fix the command if it is a defect, or the test if it assumed one release's behaviour, and record it under "Known per-version differences".

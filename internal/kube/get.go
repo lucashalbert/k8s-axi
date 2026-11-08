@@ -92,13 +92,24 @@ func (g *globals) get(cmd *cobra.Command, c *Clients, r Resource, ns, name strin
 		}
 		objs = []unstructured.Unstructured{*u}
 	default:
+		// With --limit 0 the list is read in chunks, as kubectl does, so no
+		// single response holds the whole collection.
 		o.Limit = int64(g.limit)
-		res, err := c.List(ctx, r, ns, o)
-		if err != nil {
-			return out, apiError("get", target+nsFlag(ns), err, "list", r.String())
+		if g.limit == 0 {
+			o.Limit = listChunk
 		}
-		objs = res.Items
-		out.Truncated, out.Remaining = res.More, res.Remaining
+		for {
+			res, err := c.List(ctx, r, ns, o)
+			if err != nil {
+				return out, apiError("get", target+nsFlag(ns), err, "list", r.String())
+			}
+			objs = append(objs, res.Items...)
+			out.Truncated, out.Remaining = res.More, res.Remaining
+			if g.limit > 0 || !res.More {
+				break
+			}
+			o.Continue, out.Truncated, out.Remaining = res.Continue, false, nil
+		}
 		if g.limit > 0 && len(objs) > g.limit { // a server that ignores the limit
 			objs, out.Truncated, out.Remaining = objs[:g.limit], true, nil
 		}

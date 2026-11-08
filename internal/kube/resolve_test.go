@@ -1,9 +1,14 @@
 package kube
 
 import (
+	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
+
+	"k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 
 	"github.com/lucashalbert/axi-sdk-go/axierr"
 )
@@ -98,5 +103,32 @@ func TestSplitTarget(t *testing.T) {
 		if (err != nil) != tt.wantErr || kind != tt.kind || name != tt.name {
 			t.Errorf("splitTarget(%v) = %q %q %v, want %q %q err=%v", tt.args, kind, name, err, tt.kind, tt.name, tt.wantErr)
 		}
+	}
+}
+
+// failingMapper is a REST mapper whose discovery cannot reach the server.
+type failingMapper struct {
+	meta.RESTMapper
+	err error
+}
+
+func (m failingMapper) KindFor(schema.GroupVersionResource) (schema.GroupVersionKind, error) {
+	return schema.GroupVersionKind{}, m.err
+}
+
+func TestResolveDiscoveryFailureIsARuntimeErrorWithAHint(t *testing.T) {
+	for name, cause := range map[string]error{
+		"connection refused": errors.New(`Get "https://10.0.0.1:6443/api": dial tcp 10.0.0.1:6443: connect: connection refused`),
+		"timeout":            fmt.Errorf("Get \"https://10.0.0.1:6443/api?timeout=1s\": %w", context.DeadlineExceeded),
+	} {
+		t.Run(name, func(t *testing.T) {
+			c, _ := readFixture(t, nil)
+			c.Mapper = failingMapper{err: cause}
+			_, err := c.Resolve("pods")
+			var ae *axierr.Error
+			if !errors.As(err, &ae) || ae.Code != axierr.CodeRuntime || ae.Hint == "" || ae.Op == "" {
+				t.Fatalf("want a runtime error with an op and a hint, got %#v", err)
+			}
+		})
 	}
 }

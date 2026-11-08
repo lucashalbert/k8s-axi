@@ -67,7 +67,7 @@ func listKinds() map[schema.GroupVersionResource]string {
 
 // readFixture builds fake clients that serve servedResources: typed objects go
 // to the fake clientset and unstructured ones to the fake dynamic client.
-func readFixture(t *testing.T, typed []runtime.Object, dyn ...runtime.Object) (*Clients, *kubefake.Clientset) {
+func readFixture(t testing.TB, typed []runtime.Object, dyn ...runtime.Object) (*Clients, *kubefake.Clientset) {
 	t.Helper()
 	c, fd := fakeClients()
 	cs := c.Typed.(*kubefake.Clientset)
