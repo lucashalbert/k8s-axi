@@ -201,7 +201,8 @@ func nonNil[T any](s []T) []T {
 	return s
 }
 
-// labelSelector renders the metav1.LabelSelector at path, or "" when absent.
+// labelSelector renders the metav1.LabelSelector at path in selector syntax,
+// or "" when absent or invalid.
 func labelSelector(o map[string]any, path ...string) string {
 	m := dict(o, path...)
 	if m == nil {
@@ -211,7 +212,11 @@ func labelSelector(o map[string]any, path ...string) string {
 	if runtime.DefaultUnstructuredConverter.FromUnstructured(m, &ls) != nil {
 		return ""
 	}
-	return metav1.FormatLabelSelector(&ls)
+	sel, err := metav1.LabelSelectorAsSelector(&ls)
+	if err != nil {
+		return ""
+	}
+	return sel.String()
 }
 
 // mapSelector renders a Service's plain spec.selector map.
