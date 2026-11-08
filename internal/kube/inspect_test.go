@@ -157,8 +157,8 @@ func TestInspectRelatedEventsNoteQuotesShellArguments(t *testing.T) {
 		objs = append(objs, event("team one", "e"+string(rune('a'+i)), "Normal", "R", "Pod", "busy pod", time.Duration(i+1)*time.Minute))
 	}
 	c, _ := readFixture(t, objs)
-	ev := runJSON(t, c, "inspect", "pod", "busy pod", "-n", "team one")["events"].(map[string]any)
-	if note := ev["note"].(string); !strings.Contains(note, "k8s-axi events pods 'busy pod' -n 'team one'") {
+	ev := runJSON(t, c, "inspect", "pod", "busy pod", "-n", "team one", "--context", "prod east", "--kubeconfig", "/tmp/kube cfg")["events"].(map[string]any)
+	if note := ev["note"].(string); !strings.Contains(note, "k8s-axi events pods 'busy pod' --context 'prod east' --kubeconfig '/tmp/kube cfg' -n 'team one'") {
 		t.Errorf("note = %q", note)
 	}
 }

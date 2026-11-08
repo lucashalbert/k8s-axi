@@ -110,7 +110,7 @@ func (g *globals) inspect(ctx context.Context, c *Clients, r Resource, u *unstru
 		Details:    detailsFor(r, safe, u.Object),
 		Conditions: conditions(safe, g.full),
 		Owners:     c.ownerChain(ctx, u),
-		Events:     c.relatedEvents(ctx, r, u, g.full),
+		Events:     g.relatedEvents(ctx, c, r, u),
 	}
 	if withLabels {
 		out.Labels = su.GetLabels()
@@ -130,10 +130,10 @@ func (g *globals) inspect(ctx context.Context, c *Clients, r Resource, u *unstru
 
 // relatedEvents are the newest events about u. A failure to read events is
 // reported on the block instead of failing the whole inspect.
-func (c *Clients) relatedEvents(ctx context.Context, r Resource, u *unstructured.Unstructured, full bool) relatedEvents {
+func (g *globals) relatedEvents(ctx context.Context, c *Clients, r Resource, u *unstructured.Unstructured) relatedEvents {
 	res, err := c.Events(ctx, eventQuery{Namespace: u.GetNamespace(), Kind: u.GetKind(), Name: u.GetName(), UID: string(u.GetUID())})
 	if err != nil {
-		return relatedEvents{Items: eventRows(nil, false, full), Note: "events unavailable: " + reasonOf(err)}
+		return relatedEvents{Items: eventRows(nil, false, g.full), Note: "events unavailable: " + reasonOf(err)}
 	}
 	evs := res.Events
 	out := relatedEvents{Total: len(evs), Truncated: res.Cut}
@@ -141,10 +141,10 @@ func (c *Clients) relatedEvents(ctx context.Context, r Resource, u *unstructured
 		evs, out.Truncated = evs[:inspectEvents], true
 	}
 	out.Count = len(evs)
-	out.Items = eventRows(evs, false, full)
+	out.Items = eventRows(evs, false, g.full)
 	if out.Truncated {
 		out.Note = fmt.Sprintf("showing %d of %d; see them all with %s", out.Count, out.Total,
-			commandHint("events", r.String(), u.GetName())+nsFlag(u.GetNamespace()))
+			g.cmdline("events", r.String(), u.GetName())+nsFlag(u.GetNamespace()))
 	}
 	if res.Cut {
 		out.Note += "; more than " + fmt.Sprint(maxEventScan) + " events matched, so the newest may be missing"
