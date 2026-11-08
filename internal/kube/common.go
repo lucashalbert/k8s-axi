@@ -25,14 +25,47 @@ func scopeNamespace(cmd *cobra.Command, c *Clients, all bool) (string, error) {
 // --context and --kubeconfig the current command was given so the hint
 // targets the same cluster.
 func (g *globals) cmdline(parts ...string) string {
-	s := "k8s-axi " + strings.Join(parts, " ")
+	s := commandHint(parts...)
 	if g.context != "" {
-		s += " --context " + g.context
+		s += " --context " + shellArg(g.context)
 	}
 	if g.kubeconfig != "" {
-		s += " --kubeconfig " + g.kubeconfig
+		s += " --kubeconfig " + shellArg(g.kubeconfig)
 	}
 	return s
+}
+
+func commandHint(parts ...string) string {
+	return "k8s-axi " + shellJoin(parts)
+}
+
+func shellJoin(parts []string) string {
+	quoted := make([]string, 0, len(parts))
+	for _, p := range parts {
+		quoted = append(quoted, shellArg(p))
+	}
+	return strings.Join(quoted, " ")
+}
+
+func shellArg(s string) string {
+	if s != "" && shellSafe(s) {
+		return s
+	}
+	return "'" + strings.ReplaceAll(s, "'", "'\\''") + "'"
+}
+
+func shellSafe(s string) bool {
+	for _, r := range s {
+		switch {
+		case r >= 'A' && r <= 'Z':
+		case r >= 'a' && r <= 'z':
+		case r >= '0' && r <= '9':
+		case strings.ContainsRune("_@%+=:,./-", r):
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 // nsFlag is " -n NS" for a namespaced object, else empty.
@@ -40,7 +73,7 @@ func nsFlag(ns string) string {
 	if ns == "" {
 		return ""
 	}
-	return " -n " + ns
+	return " -n " + shellArg(ns)
 }
 
 // truncate cuts s to at most n runes, ending in an ellipsis when it was cut.

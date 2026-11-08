@@ -149,6 +149,20 @@ func TestInspectEventsAreBounded(t *testing.T) {
 	}
 }
 
+func TestInspectRelatedEventsNoteQuotesShellArguments(t *testing.T) {
+	freezeTime(t)
+	var objs []runtime.Object
+	objs = append(objs, runningPod("team one", "busy pod", nil))
+	for i := 0; i < 11; i++ {
+		objs = append(objs, event("team one", "e"+string(rune('a'+i)), "Normal", "R", "Pod", "busy pod", time.Duration(i+1)*time.Minute))
+	}
+	c, _ := readFixture(t, objs)
+	ev := runJSON(t, c, "inspect", "pod", "busy pod", "-n", "team one")["events"].(map[string]any)
+	if note := ev["note"].(string); !strings.Contains(note, "k8s-axi events pods 'busy pod' -n 'team one'") {
+		t.Errorf("note = %q", note)
+	}
+}
+
 func TestInspectWorkloadAndClusterScopedDetails(t *testing.T) {
 	c := inspectFixture(t)
 	d := runJSON(t, c, "inspect", "deploy", "web")["details"].(map[string]any)

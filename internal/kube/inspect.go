@@ -144,7 +144,7 @@ func (c *Clients) relatedEvents(ctx context.Context, r Resource, u *unstructured
 	out.Items = eventRows(evs, false, full)
 	if out.Truncated {
 		out.Note = fmt.Sprintf("showing %d of %d; see them all with %s", out.Count, out.Total,
-			"k8s-axi events "+r.String()+" "+u.GetName()+nsFlag(u.GetNamespace()))
+			commandHint("events", r.String(), u.GetName())+nsFlag(u.GetNamespace()))
 	}
 	if res.Cut {
 		out.Note += "; more than " + fmt.Sprint(maxEventScan) + " events matched, so the newest may be missing"

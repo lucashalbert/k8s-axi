@@ -234,6 +234,17 @@ func TestGetOneByName(t *testing.T) {
 	}
 }
 
+func TestGetNextStepHintsQuoteShellArguments(t *testing.T) {
+	freezeTime(t)
+	c, _ := readFixture(t, []runtime.Object{runningPod("team one", "pod one", nil)})
+	m := runJSON(t, c, "get", "pods", "-n", "team one", "--context", "prod east", "--kubeconfig", "/tmp/kube cfg")
+	next := m["next"].([]any)[0].(string)
+	want := "k8s-axi inspect pods 'pod one' --context 'prod east' --kubeconfig '/tmp/kube cfg' -n 'team one'"
+	if next != want {
+		t.Errorf("next = %q, want %q", next, want)
+	}
+}
+
 func TestGetKinds(t *testing.T) {
 	c, _ := getFixture(t)
 	tests := []struct {
