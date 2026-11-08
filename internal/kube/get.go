@@ -41,8 +41,8 @@ func (g *globals) getCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if name != "" && (selector != "" || fieldSelector != "" || all) {
-				return axierr.Usage("get", "a name cannot be combined with -l, --field-selector or -A", "drop the name to filter a list, or drop the filters to read one object")
+			if name != "" && (selector != "" || fieldSelector != "") {
+				return axierr.Usage("get", "a name cannot be combined with -l or --field-selector", "drop the name to filter a list, or drop the filters to read one object")
 			}
 			f, err := cli.Format(cmd)
 			if err != nil {
@@ -52,11 +52,14 @@ func (g *globals) getCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			ns, err := scopeNamespace(cmd, c, all)
+			r, err := c.Resolve(kind)
 			if err != nil {
 				return err
 			}
-			r, err := c.Resolve(kind)
+			if name != "" && all && r.Namespaced {
+				return axierr.Usage("get", "a namespaced object name cannot be combined with -A", "drop the name to list across namespaces, or drop -A to read one object")
+			}
+			ns, err := scopeNamespace(cmd, c, all)
 			if err != nil {
 				return err
 			}

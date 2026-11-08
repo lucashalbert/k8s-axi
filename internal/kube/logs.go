@@ -172,12 +172,6 @@ func (g *globals) logs(ctx context.Context, c *Clients, args []string, o logOpts
 		return out, axierr.Usage("logs", fmt.Sprintf("no pod of %s has a container named %q", tgt.label, o.container), "check the names with 'k8s-axi inspect pod NAME'")
 	}
 
-	skippedStreams := 0
-	if maxStreams := o.maxBytes / minStreamBytes; len(jobs) > maxStreams {
-		skippedStreams = len(jobs) - maxStreams
-		jobs = jobs[:maxStreams]
-		out.Truncated = true
-	}
 	budget := o.maxBytes / len(jobs)
 	var failed []string
 	for _, j := range jobs {
@@ -197,7 +191,7 @@ func (g *globals) logs(ctx context.Context, c *Clients, args []string, o logOpts
 		}
 		return out, axierr.Runtime("logs", "context/"+c.Context+" "+tgt.label, fmt.Errorf("%s", failed[0]), hint)
 	}
-	out.Note = logsNote(out, tgt.matched, tgt.matchedMore, len(pods), skippedStreams, o)
+	out.Note = logsNote(out, tgt.matched, tgt.matchedMore, len(pods), o)
 	out.Next = g.logsNext(out)
 	return out, nil
 }
@@ -399,15 +393,12 @@ func truncateBytes(s string, n int) string {
 	return s[:limit] + ellipsis
 }
 
-func logsNote(out logsOut, matched int, matchedMore bool, shown, skippedStreams int, o logOpts) string {
+func logsNote(out logsOut, matched int, matchedMore bool, shown int, o logOpts) string {
 	var notes []string
 	if matchedMore {
 		notes = append(notes, fmt.Sprintf("showing %d of more than %d pods (first by name); name a pod or narrow with -l to see others", shown, matched))
 	} else if matched > shown {
 		notes = append(notes, fmt.Sprintf("showing %d of %d pods (first by name); name a pod or narrow with -l to see others", shown, matched))
-	}
-	if skippedStreams > 0 {
-		notes = append(notes, fmt.Sprintf("%d stream(s) left unread so --max-bytes %d stays within the whole response", skippedStreams, o.maxBytes))
 	}
 	if logsWereCut(out) {
 		notes = append(notes, fmt.Sprintf("older lines were left out (--tail %d, --max-bytes %d); raise them or narrow with --since", o.tail, o.maxBytes))

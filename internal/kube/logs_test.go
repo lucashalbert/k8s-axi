@@ -292,20 +292,27 @@ func TestLogsByteBudgetIsSharedAcrossStreams(t *testing.T) {
 	}
 }
 
-func TestLogsDropsStreamsWhenMinimumWouldExceedTotalBudget(t *testing.T) {
+func TestLogsReadsAllStreamsWhenBudgetIsTight(t *testing.T) {
 	freezeTime(t)
 	var objs []runtime.Object
 	for i := 1; i <= 5; i++ {
 		objs = append(objs, runningPod("default", fmt.Sprintf("tight-%d", i), map[string]string{"app": "tight"}))
 	}
 	c, _ := readFixture(t, objs)
-	calls := stubLogs(t, func(string, string) (string, error) { return "ok\n", nil })
+	calls := stubLogs(t, func(string, string) (string, error) { return strings.Repeat("x", 300) + "\n", nil })
 	m := runJSON(t, c, "logs", "-l", "app=tight", "--max-bytes", "1024")
-	if len(m["streams"].([]any)) != 1 || len(*calls) != 1 || m["truncated"] != true {
-		t.Fatalf("budget was not enforced before opening streams: %v calls=%d", m, len(*calls))
+	streams := m["streams"].([]any)
+	if len(streams) != 5 || len(*calls) != 5 || m["truncated"] != true {
+		t.Fatalf("streams were not all read: %v calls=%d", m, len(*calls))
 	}
-	note := m["note"].(string)
-	if !strings.Contains(note, "4 stream(s) left unread") || strings.Contains(note, "older lines were left out") {
+	total := 0
+	for _, s := range streams {
+		total += len(strings.Join(logLines(s.(map[string]any)), "\n"))
+	}
+	if total > 1024 {
+		t.Errorf("total log bytes %d, want <= 1024", total)
+	}
+	if note := m["note"].(string); !strings.Contains(note, "older lines were left out") || strings.Contains(note, "left unread") {
 		t.Errorf("note = %q", note)
 	}
 }

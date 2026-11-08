@@ -234,6 +234,17 @@ func TestGetOneByName(t *testing.T) {
 	}
 }
 
+func TestGetClusterScopedNameIgnoresAllNamespaces(t *testing.T) {
+	c, _ := getFixture(t)
+	m := runJSON(t, c, "get", "node", "n1", "-A")
+	if m["count"] != float64(1) || items(m)[0]["name"] != "n1" || m["namespace"] != nil {
+		t.Errorf("node read with -A: %v", m)
+	}
+	if code, _, _ := run(t, c, "get", "pod", "a", "-A"); code != 2 {
+		t.Errorf("namespaced object with -A exit %d, want 2", code)
+	}
+}
+
 func TestGetNextStepHintsQuoteShellArguments(t *testing.T) {
 	freezeTime(t)
 	c, _ := readFixture(t, []runtime.Object{runningPod("team one", "pod one", nil)})
