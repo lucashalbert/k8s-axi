@@ -113,6 +113,16 @@ func eventTime(e *corev1.Event) time.Time {
 	return t
 }
 
+func eventFirstSeen(e *corev1.Event) time.Time {
+	switch {
+	case !e.FirstTimestamp.IsZero():
+		return e.FirstTimestamp.Time
+	case !e.EventTime.IsZero():
+		return e.EventTime.Time
+	}
+	return e.CreationTimestamp.Time
+}
+
 func seriesTime(e *corev1.Event) time.Time {
 	if e.Series == nil {
 		return time.Time{}
@@ -161,7 +171,7 @@ func eventRows(evs []corev1.Event, showNS, full bool) any {
 		for i := range evs {
 			e := &evs[i]
 			r := eventRowFull{Age: age(eventTime(e)), Type: e.Type, Reason: e.Reason, Object: objectRef(e), Count: eventCount(e),
-				FirstSeen: e.FirstTimestamp.UTC().Format(time.RFC3339), LastSeen: eventTime(e).UTC().Format(time.RFC3339),
+				FirstSeen: eventFirstSeen(e).UTC().Format(time.RFC3339), LastSeen: eventTime(e).UTC().Format(time.RFC3339),
 				Component: component(e), UID: string(e.InvolvedObject.UID), Message: eventMessage(e.Message)}
 			if showNS {
 				r.Namespace = e.Namespace

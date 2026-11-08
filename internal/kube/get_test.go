@@ -16,6 +16,7 @@ import (
 	"k8s.io/utils/ptr"
 
 	"github.com/lucashalbert/axi-sdk-go/cli"
+	"github.com/lucashalbert/axi-sdk-go/redact"
 )
 
 var fixedNow = time.Date(2026, 11, 7, 12, 0, 0, 0, time.UTC)
@@ -322,6 +323,32 @@ func TestGetSecretNeverLeaksInAnyFormat(t *testing.T) {
 			if strings.Contains(out+errOut, leak) {
 				t.Errorf("%v leaked %q:\n%s", args, leak, out)
 			}
+		}
+	}
+}
+
+func TestFullConfigMapMasksCredentialBinaryData(t *testing.T) {
+	freezeTime(t)
+	c, _ := readFixture(t, []runtime.Object{&corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "cfg"},
+		BinaryData: map[string][]byte{
+			"db_password": []byte("hunter2"),
+			"asset":       []byte("public"),
+		},
+	}})
+	for _, args := range [][]string{
+		{"get", "configmap", "cfg", "--full"},
+		{"inspect", "configmap", "cfg", "--full"},
+	} {
+		code, out, errOut := run(t, c, args...)
+		if code != 0 {
+			t.Fatalf("%v: exit %d: %s", args, code, errOut)
+		}
+		if strings.Contains(out, b64("hunter2")) || strings.Contains(out, "hunter2") {
+			t.Errorf("%v leaked credential binaryData:\n%s", args, out)
+		}
+		if !strings.Contains(out, redact.Placeholder) || !strings.Contains(out, b64("public")) {
+			t.Errorf("%v did not preserve expected full ConfigMap shape:\n%s", args, out)
 		}
 	}
 }

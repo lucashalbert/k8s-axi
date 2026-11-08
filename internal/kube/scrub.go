@@ -44,6 +44,7 @@ func scrubObject(obj map[string]any) map[string]any {
 		}
 	case isKind(u, "", "ConfigMap"):
 		maskCredentialKeys(out, "data")
+		maskCredentialKeys(out, "binaryData")
 	}
 	walk(out)
 	return out
