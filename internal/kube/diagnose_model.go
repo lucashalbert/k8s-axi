@@ -4,6 +4,11 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+
+	"github.com/lucashalbert/axi-sdk-go/redact"
 )
 
 // Severity and basis values of a finding.
@@ -39,8 +44,8 @@ type finding struct {
 var ruleOrder = []string{
 	"quota-exceeded", "replica-failure", "node-unhealthy",
 	"image-pull", "image-pull-cause", "container-error", "init-failure",
-	"unschedulable", "unschedulable-cause", "evicted", "evicted-cause",
-	"oom-killed", "oom-cause", "crash-loop", "restarts", "probe-failed", "not-ready", "terminating-stuck",
+	"unschedulable", "unschedulable-cause", "startup-failed", "evicted", "evicted-cause",
+	"oom-killed", "oom-cause", "crash-loop", "container-failed", "restarts", "probe-failed", "not-ready", "terminating-stuck",
 	"rollout-stalled", "rollout-blocked", "rollout-progressing", "replicas-unavailable", "daemonset-unavailable", "paused", "scaled-to-zero",
 	"job-failed", "job-retrying", "job-suspended",
 	"service-no-pods", "service-selector-mismatch", "service-no-ready-endpoints", "service-partial-endpoints", "service-port-mismatch", "service-lb-pending", "service-no-selector",
@@ -155,4 +160,63 @@ func conclusionOf(fs []finding) string {
 		c += fmt.Sprintf("; %d more findings", n)
 	}
 	return c
+}
+
+// snapshot is everything the rules read: the target and the objects gathered
+// around it. Rules do no I/O, so a snapshot built from fixtures is a test.
+type snapshot struct {
+	Resource    Resource
+	Target      *unstructured.Unstructured
+	Pods        []unstructured.Unstructured // the target's pods; a Pod target is itself
+	ReplicaSets []unstructured.Unstructured // Deployment only
+	Events      []corev1.Event              // warnings about the target, its pods and replica sets
+	Nodes       map[string]*unstructured.Unstructured
+	Quotas      []unstructured.Unstructured
+	Slices      []unstructured.Unstructured // Service only: its EndpointSlices
+	SlicesRead  bool                        // false when the slices could not be read
+	NSPods      []unstructured.Unstructured // Service only: pods of the namespace
+	Full        bool
+}
+
+// text makes a message from the cluster safe for evidence: masked for
+// credentials, on one line, and cut unless --full.
+func (s *snapshot) text(m string) string {
+	m = strings.Join(strings.Fields(redact.Mask(m)), " ")
+	if !s.Full {
+		m = truncate(m, messageWidth)
+	}
+	return m
+}
+
+// run applies every rule that fits the target's kind.
+func (s *snapshot) run() []finding {
+	out := s.podRules()
+	switch s.Resource.GVR.Resource {
+	case "deployments":
+		out = append(out, s.deploymentRules()...)
+	case "statefulsets":
+		out = append(out, s.statefulSetRules()...)
+	case "daemonsets":
+		out = append(out, s.daemonSetRules()...)
+	case "jobs":
+		out = append(out, s.jobRules()...)
+	case "services":
+		out = append(out, s.serviceRules()...)
+	}
+	if s.Resource.GVR.Resource != "pods" && s.Resource.GVR.Resource != "services" {
+		out = append(out, s.controllerEventRules()...)
+		out = append(out, s.quotaRules()...)
+	}
+	return append(out, s.nodeRules()...)
+}
+
+// eventsAbout are the events whose involved object has the given kind and name.
+func (s *snapshot) eventsAbout(kind, name string) []corev1.Event {
+	var out []corev1.Event
+	for _, e := range s.Events {
+		if e.InvolvedObject.Kind == kind && e.InvolvedObject.Name == name {
+			out = append(out, e)
+		}
+	}
+	return out
 }
