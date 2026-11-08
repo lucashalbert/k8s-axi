@@ -45,7 +45,9 @@ k8s-axi plan rollout restart KIND/NAME [-n NS]
 - Verbs are explicit: `get` and `update` on the `scale` subresource, `get` and `patch` on the workload.
 - `--json`, `--yaml` and `--full` behave as for the read commands.
   The plan document comes first, then one result document, so JSON output is two objects in sequence.
-- Concurrency (PRD 6.8): scale sends the `resourceVersion` it read, so a concurrent change is a 409 conflict reported with a retry hint.
+- Concurrency (PRD 6.8): scale sends the `resourceVersion` it read.
+  That version is the workload's own, which controllers bump with every status write, so a conflict is retried (at most 3 times) against a fresh read while the replica count is still the one the plan was made from.
+  If another writer changed the replica count, the plan is stale and the conflict is reported with a retry hint instead of overwriting their change.
   Restart is a merge patch of one annotation, which is how `kubectl` does it, and does not need a version.
 - A requested state that already holds yields an empty `changes`, which `mutate.Run` prints as a no-op without calling the API again.
 

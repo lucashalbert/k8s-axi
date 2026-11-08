@@ -202,3 +202,32 @@ func TestScaleTOON(t *testing.T) {
 		}
 	}
 }
+
+// A controller writes the workload's status all the time, which changes its
+// resourceVersion without touching the replica count. That must not fail a scale.
+func TestScaleRetriesWhenOnlyStatusChanged(t *testing.T) {
+	e := scaleEnv(t)
+	e.beforeUpdate = func() { e.touch(deployGVR, "default", "web", nil) }
+	code, _, errOut := run(t, e.c, "scale", "deploy/web", "--replicas", "5", "-n", "default", "--json")
+	if code != 0 {
+		t.Fatalf("exit %d: %s", code, errOut)
+	}
+	if got := e.replicas(deployGVR, "default", "web"); got != 5 {
+		t.Errorf("replicas = %d, want 5", got)
+	}
+}
+
+// Someone else changing the replica count after the plan was made means the
+// plan no longer describes the change, so the command stops instead of overwriting it.
+func TestScaleStopsWhenReplicasChangedMeanwhile(t *testing.T) {
+	e := scaleEnv(t)
+	other := int64(8)
+	e.beforeUpdate = func() { e.touch(deployGVR, "default", "web", &other) }
+	code, _, errOut := run(t, e.c, "scale", "deploy/web", "--replicas", "5", "-n", "default", "--json")
+	if code != 1 || !strings.Contains(errOut, "re-run") {
+		t.Fatalf("exit %d: %s", code, errOut)
+	}
+	if got := e.replicas(deployGVR, "default", "web"); got != 8 {
+		t.Errorf("replicas = %d, want the other writer's 8", got)
+	}
+}

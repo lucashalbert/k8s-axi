@@ -27,6 +27,9 @@ type mutEnv struct {
 	patches []string         // bodies of real (non dry-run) patches
 	failOn  map[string]error // "verb resource" -> error to return
 	noDry   map[string]bool  // resources whose dry-run the server rejects
+	// beforeUpdate runs once, just before the next scale update is checked,
+	// to model another writer touching the object since it was read.
+	beforeUpdate func()
 }
 
 func newMutEnv(t *testing.T, objs ...runtime.Object) *mutEnv {
@@ -113,6 +116,10 @@ func (e *mutEnv) getScale(a clienttesting.Action) (bool, runtime.Object, error) 
 func (e *mutEnv) updateScale(act clienttesting.UpdateActionImpl, dry bool) (bool, runtime.Object, error) {
 	in := act.GetObject().(*unstructured.Unstructured)
 	name := in.GetName()
+	if f := e.beforeUpdate; f != nil {
+		e.beforeUpdate = nil
+		f()
+	}
 	obj, err := e.dyn.Tracker().Get(act.GetResource(), act.GetNamespace(), name)
 	if err != nil {
 		return true, nil, err
@@ -185,5 +192,19 @@ func jsonDocs(t *testing.T, s string) []map[string]any {
 			t.Fatalf("%v\n%s", err, s)
 		}
 		docs = append(docs, m)
+	}
+}
+
+// touch bumps the stored object's resourceVersion, optionally setting replicas
+// first, as a controller's status write or another user's scale would.
+func (e *mutEnv) touch(gvr schema.GroupVersionResource, ns, name string, replicas *int64) {
+	e.t.Helper()
+	o := e.object(gvr, ns, name).DeepCopy()
+	if replicas != nil {
+		_ = unstructured.SetNestedField(o.Object, *replicas, "spec", "replicas")
+	}
+	o.SetResourceVersion(o.GetResourceVersion() + "9")
+	if err := e.dyn.Tracker().Update(gvr, o, ns); err != nil {
+		e.t.Fatal(err)
 	}
 }

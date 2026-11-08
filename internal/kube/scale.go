@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"github.com/spf13/cobra"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 
@@ -86,16 +87,11 @@ func (g *globals) scale(cmd *cobra.Command, args []string, want int64, mode muta
 		plan: mutate.Plan{Operation: "scale", Target: t.id(), Scope: t.scope(), Changes: scaleChanges(have, want)},
 		mode: mode, tolerant: preview, verb: "update", t: t,
 		exec: func(ctx context.Context, dry bool) (mutationResult, error) {
-			s := cur.DeepCopy()
-			if err := unstructured.SetNestedField(s.Object, want, "spec", "replicas"); err != nil {
-				return mutationResult{}, err
-			}
 			o := metav1.UpdateOptions{FieldManager: fieldManager}
 			if dry {
 				o.DryRun = dryRunAll
 			}
-			// The Scale carries the resourceVersion read above, so a concurrent change is a conflict.
-			out, err := t.ri.Update(ctx, s, o, "scale")
+			out, err := updateScale(ctx, t, cur, have, want, o)
 			if err != nil {
 				return mutationResult{}, err
 			}
@@ -131,4 +127,33 @@ func (c *Clients) hasScale(r Resource) (bool, error) {
 		}
 	}
 	return false, nil
+}
+
+// scaleRetries bounds how often a conflicting update is retried.
+const scaleRetries = 3
+
+// updateScale writes the replica count. The Scale carries the resourceVersion
+// it was read at, but that is the workload's own, which controllers bump with
+// every status write. A conflict is therefore retried against a fresh read as
+// long as the replica count is still the one the plan was made from. If
+// someone else changed it, the plan is stale and the conflict is returned.
+func updateScale(ctx context.Context, t mutationTarget, cur *unstructured.Unstructured, have, want int64, o metav1.UpdateOptions) (*unstructured.Unstructured, error) {
+	for attempt := 0; ; attempt++ {
+		s := cur.DeepCopy()
+		if err := unstructured.SetNestedField(s.Object, want, "spec", "replicas"); err != nil {
+			return nil, err
+		}
+		out, err := t.ri.Update(ctx, s, o, "scale")
+		if err == nil || !apierrors.IsConflict(err) || attempt >= scaleRetries {
+			return out, err
+		}
+		fresh, gerr := t.ri.Get(ctx, t.name, metav1.GetOptions{}, "scale")
+		if gerr != nil {
+			return nil, gerr
+		}
+		if n, _, _ := unstructured.NestedInt64(fresh.Object, "spec", "replicas"); n != have {
+			return nil, err
+		}
+		cur = fresh
+	}
 }
