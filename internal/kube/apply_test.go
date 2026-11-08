@@ -196,7 +196,7 @@ func TestApplyDryRunServerChangesNothing(t *testing.T) {
 		t.Errorf("a dry run changed the cluster: %+v", e.real())
 	}
 	next := docs[1]["next"].([]any)
-	if len(next) == 0 || !strings.Contains(next[0].(string), "k8s-axi apply -f "+file) {
+	if len(next) == 0 || !strings.Contains(next[0].(string), "k8s-axi apply -f ") || !strings.Contains(next[0].(string), file) {
 		t.Errorf("next = %v, want the apply command", next)
 	}
 

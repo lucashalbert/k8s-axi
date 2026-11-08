@@ -106,7 +106,7 @@ func readManifestFile(f string, stdin io.Reader, budget *int) ([]byte, string, e
 		if err != nil {
 			return nil, "", axierr.Runtime("apply", f, err, "check that the file is readable")
 		}
-		defer fh.Close()
+		defer func() { _ = fh.Close() }()
 		r = fh
 	}
 	if r == nil {
