@@ -76,7 +76,7 @@ k8s-axi plan rollout restart KIND/NAME [-n NS]
 
 `plan scale` and `plan rollout restart` run the same code in `DryRun` mode only, so they cannot change anything and take no `--dry-run` flag.
 They use a server-side dry-run request where the API supports it.
-A resource that does not support dry-run is not an error for `plan`: the result says `validated: false` with a note, and the plan reflects the live state only.
+A resource that does not support dry-run is not an error for `plan`: the result status is `not-validated` with a note, and the plan reflects the live state only.
 The result carries a `next` hint with the exact command that applies the plan.
 
 ## Output
@@ -128,7 +128,7 @@ Each task is test first, then code, then one conventional commit.
 5. **rollout restart.**
    Tests: the three kinds, annotation patch content, paused deployment, strategy notes, unsupported kind, dry-run persists nothing, the plan timestamp equals the applied one.
 6. **plan.**
-   Tests: both subcommands change nothing, unsupported dry-run degrades to `validated: false`, the next hint is the apply command.
+   Tests: both subcommands change nothing, unsupported dry-run degrades to `not-validated`, the next hint is the apply command.
 7. **Integration tests on kind** for the five-minor matrix: scale a deployment up, to zero and back, scale a statefulset and a CRD with a scale subresource, `--dry-run=server` changes nothing, `rollout restart` produces new pods, `plan` changes nothing, a service account without `patch` gets the forbidden hint, and the kubeconfig bytes and current context are unchanged.
 8. **Docs.**
    README, `docs/compatibility.md`, the embedded skill.
