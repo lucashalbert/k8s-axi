@@ -71,11 +71,13 @@ func TestServiceNoPodsAndSelectorMismatch(t *testing.T) {
 	s.Slices, s.SlicesRead = []unstructured.Unstructured{slice(t, 0, 0)}, true
 	near := readyPod(t, "web-7", "")
 	near.SetLabels(map[string]string{"app": "webapp", "tier": "front"})
+	missing := readyPod(t, "web-6", "")
+	missing.SetLabels(map[string]string{"app": "web"})
 	far := readyPod(t, "other", "")
 	far.SetLabels(map[string]string{"app": "other"})
 	unrelated := readyPod(t, "cache", "")
 	unrelated.SetLabels(map[string]string{"role": "cache"})
-	s.NSPods = []unstructured.Unstructured{far, near, unrelated}
+	s.NSPods = []unstructured.Unstructured{far, near, missing, unrelated}
 	fs := ranked(s)
 	np := find(fs, "service-no-pods")
 	if np == nil || np.Severity != sevCritical || np.Basis != basisObserved || !hasEvidence(np, "selector app=web,tier=front matches 0 pods in namespace default") {
@@ -85,8 +87,11 @@ func TestServiceNoPodsAndSelectorMismatch(t *testing.T) {
 	if mm == nil || mm.Basis != basisInferred || mm.Severity != sevCritical {
 		t.Fatalf("service-selector-mismatch = %+v", mm)
 	}
-	if len(mm.Evidence) < 2 || mm.Evidence[0] != "pod web-7 has app=webapp (selector wants app=web)" {
+	if len(mm.Evidence) < 3 || mm.Evidence[0] != "pod web-6 has missing tier (selector wants tier=front)" {
 		t.Errorf("closest pod first: %v", mm.Evidence)
+	}
+	if !hasEvidence(mm, "pod web-7 has app=webapp (selector wants app=web)") {
+		t.Errorf("wrong selector values are still reported: %v", mm.Evidence)
 	}
 	for _, e := range mm.Evidence {
 		if e == "pod cache" || hasEvidence(mm, "cache") {
