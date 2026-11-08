@@ -2,6 +2,8 @@ package app
 
 import (
 	"bytes"
+	"context"
+	"errors"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -39,7 +41,7 @@ func binary(t *testing.T) string {
 		if runtime.GOOS == "windows" {
 			binPath += ".exe"
 		}
-		out, err := exec.Command("go", "build", "-ldflags", "-X main.version=0.0.1", "-o", binPath, "../../cmd/k8s-axi").CombinedOutput()
+		out, err := exec.CommandContext(context.Background(), "go", "build", "-ldflags", "-X main.version=0.0.1", "-o", binPath, "../../cmd/k8s-axi").CombinedOutput()
 		if err != nil {
 			buildErr = &buildError{err, string(out)}
 		}
@@ -71,7 +73,7 @@ func (e *buildError) Error() string { return e.err.Error() + "\n" + e.out }
 func runBin(t *testing.T, bin string, env []string, args ...string) (int, string, string) {
 	t.Helper()
 	home := t.TempDir()
-	cmd := exec.Command(bin, args...)
+	cmd := exec.CommandContext(context.Background(), bin, args...)
 	base := []string{"PATH=" + os.Getenv("PATH"), "HOME=" + home, "XDG_CACHE_HOME=" + home, "LocalAppData=" + home, "USERPROFILE=" + home}
 	for _, k := range []string{"SystemRoot", "TMP", "TEMP", "TMPDIR"} { // Windows networking and temp files need these
 		if v := os.Getenv(k); v != "" {
@@ -83,7 +85,8 @@ func runBin(t *testing.T, bin string, env []string, args ...string) (int, string
 	cmd.Stdout, cmd.Stderr = &out, &errb
 	err := cmd.Run()
 	code := 0
-	if ee, ok := err.(*exec.ExitError); ok {
+	var ee *exec.ExitError
+	if errors.As(err, &ee) {
 		code = ee.ExitCode()
 	} else if err != nil {
 		t.Fatal(err)
@@ -141,18 +144,18 @@ func TestHangingAPIServerIsBoundedByTimeout(t *testing.T) {
 // halfway through a download.
 func deadProxy(t *testing.T) string {
 	t.Helper()
-	l, err := net.Listen("tcp", "127.0.0.1:0")
+	l, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { l.Close() })
+	t.Cleanup(func() { _ = l.Close() })
 	go func() {
 		for {
 			c, err := l.Accept()
 			if err != nil {
 				return
 			}
-			c.Close()
+			_ = c.Close()
 		}
 	}()
 	return "http://" + l.Addr().String()

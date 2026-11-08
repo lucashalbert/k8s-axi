@@ -169,10 +169,10 @@ func (w *wireAPI) serve(rw http.ResponseWriter, r *http.Request, groups int) {
 	rw.Header().Set("Content-Type", "application/json")
 	switch r.URL.Path {
 	case "/version":
-		fmt.Fprint(rw, `{"major":"1","minor":"37","gitVersion":"v1.37.0"}`)
+		_, _ = fmt.Fprint(rw, `{"major":"1","minor":"37","gitVersion":"v1.37.0"}`)
 	case "/api":
 		rw.Header().Set("Content-Type", aggregated)
-		fmt.Fprint(rw, `{"kind":"APIGroupDiscoveryList","apiVersion":"apidiscovery.k8s.io/v2","items":[{"versions":[{"version":"v1","resources":[
+		_, _ = fmt.Fprint(rw, `{"kind":"APIGroupDiscoveryList","apiVersion":"apidiscovery.k8s.io/v2","items":[{"versions":[{"version":"v1","resources":[
 {"resource":"pods","responseKind":{"group":"","version":"v1","kind":"Pod"},"scope":"Namespaced","singularResource":"pod","verbs":["get","list"]}]}]}]}`)
 	case "/apis":
 		rw.Header().Set("Content-Type", aggregated)
@@ -181,7 +181,7 @@ func (w *wireAPI) serve(rw http.ResponseWriter, r *http.Request, groups int) {
 			items = append(items, fmt.Sprintf(`{"metadata":{"name":"g%d.example.com"},"versions":[{"version":"v1","resources":[
 {"resource":"things%d","responseKind":{"group":"g%d.example.com","version":"v1","kind":"Thing%d"},"scope":"Namespaced","singularResource":"thing%d","verbs":["get","list"]}]}]}`, i, i, i, i, i))
 		}
-		fmt.Fprintf(rw, `{"kind":"APIGroupDiscoveryList","apiVersion":"apidiscovery.k8s.io/v2","items":[%s]}`, strings.Join(items, ","))
+		_, _ = fmt.Fprintf(rw, `{"kind":"APIGroupDiscoveryList","apiVersion":"apidiscovery.k8s.io/v2","items":[%s]}`, strings.Join(items, ","))
 	case "/apis/apiextensions.k8s.io/v1/customresourcedefinitions":
 		limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
 		start, _ := strconv.Atoi(r.URL.Query().Get("continue"))
@@ -200,7 +200,7 @@ func (w *wireAPI) serve(rw http.ResponseWriter, r *http.Request, groups int) {
 		if end < groups {
 			cont = strconv.Itoa(end)
 		}
-		fmt.Fprintf(rw, `{"apiVersion":"apiextensions.k8s.io/v1","kind":"CustomResourceDefinitionList","metadata":{"continue":%q},"items":[%s]}`, cont, strings.Join(items, ","))
+		_, _ = fmt.Fprintf(rw, `{"apiVersion":"apiextensions.k8s.io/v1","kind":"CustomResourceDefinitionList","metadata":{"continue":%q},"items":[%s]}`, cont, strings.Join(items, ","))
 	default:
 		http.NotFound(rw, r)
 	}
