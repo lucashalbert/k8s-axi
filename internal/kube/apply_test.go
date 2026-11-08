@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
@@ -455,5 +456,30 @@ func TestApplySkipsWhatWaitsForAFailedCRD(t *testing.T) {
 	st := objStatuses(t, jsonDocs(t, out)[1]["result"].(map[string]any))
 	if st["customresourcedefinition/sprockets.acme.io"] != "failed" || st["sprocket/s1"] != "failed" || st["configmap/cfg"] != "created" {
 		t.Errorf("statuses = %v", st)
+	}
+}
+
+func TestApplyForbiddenNamesTheVerb(t *testing.T) {
+	e := newApplyEnv(t)
+	e.failOn["patch configmaps"] = apierrors.NewForbidden(schema.GroupResource{Resource: "configmaps"}, "cfg", errors.New("no"))
+	code, _, errOut := applyRun(t, e, manifest(t, cfgYAML), "-n", "default")
+	if code != 1 || !strings.Contains(errOut, "RBAC denied 'create' on configmaps") {
+		t.Errorf("exit %d: %s", code, errOut)
+	}
+}
+
+func TestApplyListsFivePathsUnlessFull(t *testing.T) {
+	live := &unstructured.Unstructured{Object: map[string]any{"apiVersion": "v1", "kind": "ConfigMap",
+		"metadata": map[string]any{"name": "cfg", "namespace": "default", "resourceVersion": "1"}, "data": map[string]any{}}}
+	body := "apiVersion: v1\nkind: ConfigMap\nmetadata: {name: cfg}\ndata: {a: '1', b: '1', c: '1', d: '1', e: '1', f: '1', g: '1'}\n"
+	for _, tc := range []struct {
+		args []string
+		want string
+	}{{nil, "+2 more"}, {[]string{"--full"}, "data.g"}} {
+		e := newApplyEnv(t, live.DeepCopy())
+		_, out, errOut := applyRun(t, e, manifest(t, body), append([]string{"-n", "default", "--dry-run=server", "--json"}, tc.args...)...)
+		if got := strings.Join(planChanges(t, out), "\n"); !strings.Contains(got, tc.want) {
+			t.Errorf("%v: changes = %q (%s)", tc.args, got, errOut)
+		}
 	}
 }
