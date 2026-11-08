@@ -71,6 +71,7 @@ An observed fact and its inferred cause are separate findings, so the label is n
 | `image-pull` | observed | critical | container waiting as ErrImagePull, ImagePullBackOff, InvalidImageName, ErrImageNeverPull |
 | `image-pull-cause` | inferred | critical | the waiting message: tag or name not found, registry auth, registry unreachable |
 | `crash-loop` | observed | critical | waiting CrashLoopBackOff, with restarts and the last termination reason and exit code |
+| `container-failed` | observed | critical | a pod that failed with a container exiting non-zero |
 | `container-error` | observed | critical | CreateContainerConfigError, CreateContainerError, RunContainerError and their messages |
 | `init-failure` | observed | critical | init container stuck or terminated non-zero |
 | `oom-killed` | observed | critical | last or current termination reason OOMKilled, with the memory limit |
@@ -78,6 +79,7 @@ An observed fact and its inferred cause are separate findings, so the label is n
 | `restarts` | observed | warning | restarts with a last termination, container currently running |
 | `unschedulable` | observed | critical | PodScheduled false, reason Unschedulable, scheduler message |
 | `unschedulable-cause` | inferred | critical | message parsed to insufficient cpu or memory, untolerated taint, node selector or affinity, unbound volume |
+| `startup-failed` | observed | critical | FailedMount, FailedAttachVolume, FailedMapVolume and FailedCreatePodSandBox events |
 | `probe-failed` | observed | warning | Unhealthy events: readiness, liveness, startup |
 | `not-ready` | observed | warning | pod running but not Ready, when nothing more specific explains it |
 | `evicted` | observed | critical | pod reason Evicted, with the message |
@@ -85,7 +87,7 @@ An observed fact and its inferred cause are separate findings, so the label is n
 | `terminating-stuck` | inferred | warning | deletion timestamp more than 5 minutes old |
 | `node-unhealthy` | observed | warning | node Ready not true, or Memory, Disk or PID pressure |
 | `replica-failure` | observed | critical | ReplicaFailure condition or FailedCreate events from the controller |
-| `quota-exceeded` | observed | critical | FailedCreate event naming a quota, or a ResourceQuota with used at hard |
+| `quota-exceeded` | observed with a FailedCreate event naming a quota, inferred from quota usage alone | critical | the event, plus any ResourceQuota with used at hard |
 | `rollout-stalled` | observed | critical | Progressing false with ProgressDeadlineExceeded |
 | `rollout-progressing` | observed | info | updated below desired, or observedGeneration behind generation |
 | `rollout-blocked` | inferred | warning | StatefulSet ordered update waiting on its first not-ready pod |
@@ -128,10 +130,11 @@ findings[2]:
     subject: pod/web-7d4-a, pod/web-7d4-b
     summary: ...
     evidence[3]: ...
-pods: {total, shown, truncated, items[n]{name,ready,status,restarts,node,age}}   # unhealthy first
+pods: {total, shown, unhealthy, truncated, items[n]{name,ready,status,restarts,node,age}}   # unhealthy first
+events: {count, total, truncated, items[n]{age,type,reason,object,count,message}}   # newest 5 warnings
 logs[n]: pod, container, previous, lines, truncated, log[...]
 gaps[n]: events: forbidden (RBAC denied 'list' on events)
-checked: object, owners, pods (3), events (4 warnings), logs (1)
+checked: object, owners, pods (3), warning events (4), logs (1)
 next[n]: k8s-axi logs pod/web-7d4-a --previous | k8s-axi events pod web-7d4-a
 ```
 
@@ -145,7 +148,9 @@ New files in `internal/kube`; the only edit to existing code is adding `g.diagno
 
 | File | Content |
 |---|---|
-| `diagnose.go` | the command, `snapshot` gathering with bounds and gaps, output types, ranking, conclusion, next steps |
+| `diagnose.go` | the command, gathering with bounds and gaps, output types |
+| `diagnose_model.go` | `finding`, `snapshot`, ranking, status and conclusion |
+| `diagnose_logs.go` | log selection, bounded reads, next steps |
 | `diagnose_pod.go` | pod and node rules, message classification tables |
 | `diagnose_workload.go` | deployment, statefulset, daemonset, job, quota and event rules |
 | `diagnose_service.go` | service and endpoint rules |

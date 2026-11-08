@@ -27,7 +27,11 @@ k8s-axi widens that window by not depending on a fixed resource list:
 - Everything else, including every CRD, goes through the dynamic client.
 - The commands use stable surfaces only: `/version`, `/api` and `/apis` discovery, list and get, pod logs, and core events.
 
-The kind matrix runs `get`, `inspect`, `events` and `logs` against every minor, including a CRD served in a non-preferred version, a Secret whose value must never appear in any output format, credential redaction in logs, `--previous` logs of a restarted container, and the structured error for a service account without permissions.
+The kind matrix runs `get`, `inspect`, `events`, `logs` and `diagnose` against every minor, including a CRD served in a non-preferred version, a Secret whose value must never appear in any output format, credential redaction in logs, `--previous` logs of a restarted container, and the structured error for a service account without permissions.
+
+`diagnose` is exercised against a pod that cannot pull its image, an unschedulable pod, a crash loop with its previous log, a failed Job, a failing readiness probe, services with a selector typo and with no ready endpoints, a Deployment over a ResourceQuota, and healthy workloads of every supported kind.
+Its rules read documented status fields and conditions, plus the wording of a few scheduler, kubelet and controller messages, so a change in that wording only costs an inferred cause finding and never the observed finding next to it.
+It also uses stable surfaces only: list and get of pods, replica sets, nodes, resource quotas, endpoint slices and events, and pod logs.
 
 Every supported minor is exercised by the kind matrix, so a regression against 1.33 to 1.35 is caught in CI rather than assumed away.
 Clusters outside the five supported minors may work but are not tested.
