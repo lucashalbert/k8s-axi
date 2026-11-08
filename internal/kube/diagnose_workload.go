@@ -231,5 +231,3 @@ func (s *snapshot) controllerEventRules() []finding {
 	}
 	return out
 }
-
-func (s *snapshot) serviceRules() []finding { return nil }
