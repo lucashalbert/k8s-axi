@@ -17,6 +17,10 @@ func apiError(op, target string, err error, verb, resource string) error {
 	switch {
 	case apierrors.IsNotFound(err):
 		hint = "check the name and namespace (-n), or list what exists with 'k8s-axi get " + resource + "'"
+	case apierrors.IsConflict(err):
+		hint = "the object changed since it was read; re-run the command to plan against its current state"
+	case dryRunUnsupported(err):
+		hint = "the API server does not support dry-run for " + resource + "; use 'k8s-axi plan' for a preview from the live state"
 	case apierrors.IsForbidden(err):
 		hint = "RBAC denied '" + verb + "' on " + resource + "; ask for that permission or use another --context"
 	case apierrors.IsUnauthorized(err):

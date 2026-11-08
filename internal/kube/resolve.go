@@ -1,6 +1,8 @@
 package kube
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -31,16 +33,31 @@ func (r Resource) String() string {
 // resource.version.group or group/version/resource. The scope and version
 // come from the cluster's discovery, never from a table.
 func (c *Clients) Resolve(arg string) (Resource, error) {
+	return c.resolve(context.Background(), arg)
+}
+
+func (c *Clients) ResolveContext(ctx context.Context, arg string) (Resource, error) {
+	return withContext(ctx, func() (Resource, error) { return c.resolve(ctx, arg) })
+}
+
+func (c *Clients) resolve(ctx context.Context, arg string) (Resource, error) {
+	mapper := meta.ToRESTMapperWithContext(c.Mapper)
 	for _, cand := range candidates(arg) {
-		gvk, err := c.Mapper.KindFor(cand)
+		gvk, err := mapper.KindForWithContext(ctx, cand)
 		if err != nil {
+			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+				return Resource{}, err
+			}
 			if meta.IsNoMatchError(err) {
 				continue
 			}
 			return Resource{}, ambiguous(arg, err)
 		}
-		m, err := c.Mapper.RESTMapping(gvk.GroupKind(), gvk.Version)
+		m, err := mapper.RESTMappingWithContext(ctx, gvk.GroupKind(), gvk.Version)
 		if err != nil {
+			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+				return Resource{}, err
+			}
 			return Resource{}, ambiguous(arg, err)
 		}
 		return Resource{GVR: m.Resource, Kind: gvk.Kind, Namespaced: m.Scope.Name() == meta.RESTScopeNameNamespace}, nil
