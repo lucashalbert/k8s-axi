@@ -192,6 +192,32 @@ func TestDiagnoseProbeAndServiceEndpoints(t *testing.T) {
 	}
 }
 
+func TestDiagnoseServiceSelectorMissingKey(t *testing.T) {
+	c, ns := itSetup(t)
+	ctx := context.Background()
+	labels := map[string]string{"app": "web"}
+	pod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "web-missing-tier", Namespace: ns, Labels: labels}, Spec: corev1.PodSpec{Containers: []corev1.Container{sleeper("app")}}}
+	if _, err := c.Typed.CoreV1().Pods(ns).Create(ctx, pod, metav1.CreateOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	svc := &corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: "svc-missing-key", Namespace: ns}, Spec: corev1.ServiceSpec{
+		Selector: map[string]string{"app": "web", "tier": "front"}, Ports: []corev1.ServicePort{{Port: 80, TargetPort: intstr.FromInt32(80)}}}}
+	if _, err := c.Typed.CoreV1().Services(ns).Create(ctx, svc, metav1.CreateOptions{}); err != nil {
+		t.Fatal(err)
+	}
+
+	m := diagUntil(t, "the service with a selector missing a required pod label", 60*time.Second, []string{"svc/svc-missing-key", "-n", ns},
+		func(m map[string]any) bool {
+			return ruleOf(m, "service-no-pods") != nil && ruleOf(m, "service-selector-mismatch") != nil
+		})
+	if f := ruleOf(m, "service-no-pods"); f["basis"] != "observed" || f["severity"] != "critical" {
+		t.Errorf("service-no-pods = %v", f)
+	}
+	if f := ruleOf(m, "service-selector-mismatch"); f["basis"] != "inferred" || f["severity"] != "critical" || !evidenceHas(f, "pod web-missing-tier has missing tier (selector wants tier=front)") {
+		t.Errorf("service-selector-mismatch = %v", f)
+	}
+}
+
 func TestDiagnoseResourceQuota(t *testing.T) {
 	c, ns := itSetup(t)
 	ctx := context.Background()
