@@ -152,7 +152,7 @@ func conclusionOf(fs []finding) string {
 	if len(fs) == 0 {
 		return "no problems found in the checked evidence"
 	}
-	c := fmt.Sprintf("%s: %s", fs[0].Summary, fs[0].Subject)
+	c := fmt.Sprintf("%s: %s", fs[0].Summary, firstSubject(fs[0]))
 	switch n := len(fs) - 1; {
 	case n == 1:
 		c += "; 1 more finding"
@@ -218,4 +218,14 @@ func (s *snapshot) eventsAbout(kind, name string) []corev1.Event {
 		}
 	}
 	return out
+}
+
+// firstSubject names the top subject of a (possibly merged) finding and how
+// many others share it.
+func firstSubject(f finding) string {
+	if f.Count <= 1 {
+		return f.Subject
+	}
+	first, _, _ := strings.Cut(f.Subject, ",")
+	return fmt.Sprintf("%s and %d more", first, f.Count-1)
 }

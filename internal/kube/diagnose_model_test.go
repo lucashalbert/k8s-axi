@@ -111,6 +111,10 @@ func TestStatusAndConclusion(t *testing.T) {
 			t.Errorf("%s: conclusion %q lacks %q", c.name, con, c.contains)
 		}
 	}
+	many := rankFindings([]finding{f("image-pull", sevCritical, basisObserved, "pod/b"), f("image-pull", sevCritical, basisObserved, "pod/a"), f("image-pull", sevCritical, basisObserved, "pod/c")})
+	if con := conclusionOf(many); con != "image-pull summary: pod/a and 2 more" {
+		t.Errorf("merged conclusion = %q", con)
+	}
 	two := rankFindings([]finding{f("image-pull", sevCritical, basisObserved, "pod/b"), f("probe-failed", sevWarning, basisObserved, "pod/a")})
 	if con := conclusionOf(two); !strings.Contains(con, "1 more finding") {
 		t.Errorf("conclusion %q should count the rest", con)
