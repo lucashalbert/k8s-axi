@@ -21,7 +21,7 @@ Kubernetes supports clients within one minor version of the API server, so a cli
 k8s-axi widens that window by not depending on a fixed resource list:
 
 - Resources are found at run time through API discovery.
-- Built-in and custom resources are read through the dynamic client, so a kind that is new or removed on one side does not need a code change.
+- Resources outside the typed table are read through the dynamic client, so a kind that is new or removed on one side does not need a code change.
 - Kinds are resolved through the REST mapper built from live discovery, so a kind served only in a non-preferred version still resolves.
 - Typed clients are used only for `v1` APIs of long-lived built-in kinds (core, `apps`, `batch`, `discovery.k8s.io`), which exist in all five supported minors.
 - Everything else, including every CRD, goes through the dynamic client.
