@@ -41,6 +41,11 @@ type Clients struct {
 	Context   string
 	Namespace string
 	Server    string // host[:port] of the API server, without credentials or scheme
+
+	// NamespaceFromContext is true when the kubeconfig context itself names
+	// a namespace, as opposed to Namespace being the fallback "default".
+	// Mutations use it to refuse an assumed namespace.
+	NamespaceFromContext bool
 }
 
 // Load resolves the kubeconfig, picks the context and builds the clients.
@@ -84,7 +89,8 @@ func Load(opts Options) (*Clients, error) {
 		}
 	}
 
-	c := &Clients{REST: rc, Context: name, Namespace: ns, Server: hostOnly(rc.Host)}
+	c := &Clients{REST: rc, Context: name, Namespace: ns, Server: hostOnly(rc.Host),
+		NamespaceFromContext: raw.Contexts[name].Namespace != ""}
 	if c.Typed, err = kubernetes.NewForConfig(rc); err != nil {
 		return nil, axierr.Runtime("create client", "context/"+name, err, "")
 	}
