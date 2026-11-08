@@ -70,7 +70,9 @@ func (g *globals) rolloutCmd(preview bool) *cobra.Command {
 }
 
 func (g *globals) restart(cmd *cobra.Command, args []string, mode mutate.Mode, preview bool, f output.Format) error {
-	t, err := g.prepare(cmd, args, func(r Resource) error {
+	ctx, cancel := g.bounded(cmd.Context())
+	defer cancel()
+	t, err := g.prepare(ctx, cmd, args, func(r Resource) error {
 		if restartable(r) {
 			return nil
 		}
@@ -80,8 +82,6 @@ func (g *globals) restart(cmd *cobra.Command, args []string, mode mutate.Mode, p
 	if err != nil {
 		return err
 	}
-	ctx, cancel := g.bounded(cmd.Context())
-	defer cancel()
 	cur, err := t.ri.Get(ctx, t.name, metav1.GetOptions{})
 	if err != nil {
 		return apiError("rollout restart", t.apiTarget(), err, "get", t.r.String())
@@ -98,7 +98,7 @@ func (g *globals) restart(cmd *cobra.Command, args []string, mode mutate.Mode, p
 		return err
 	}
 	applyLine := t.command(g, "rollout", "restart", t.hint())
-	return g.runMutation(cmd, f, mutation{
+	return g.runMutation(ctx, cmd, f, mutation{
 		plan: mutate.Plan{Operation: "rollout restart", Target: t.id(), Scope: t.scope(), Changes: restartChanges(cur, stamp)},
 		mode: mode, tolerant: preview, verb: "patch", t: t,
 		exec: func(ctx context.Context, dry bool) (mutationResult, error) {

@@ -62,13 +62,13 @@ func (g *globals) scaleCmd(preview bool) *cobra.Command {
 }
 
 func (g *globals) scale(cmd *cobra.Command, args []string, want int64, mode mutate.Mode, preview bool, f output.Format) error {
-	t, err := g.prepare(cmd, args, func(Resource) error { return nil })
+	ctx, cancel := g.bounded(cmd.Context())
+	defer cancel()
+	t, err := g.prepare(ctx, cmd, args, func(Resource) error { return nil })
 	if err != nil {
 		return err
 	}
-	ctx, cancel := g.bounded(cmd.Context())
-	defer cancel()
-	ok, err := t.c.hasScale(t.r)
+	ok, err := t.c.hasScale(ctx, t.r)
 	if err != nil {
 		return apiError("scale", t.apiTarget(), err, "get", "discovery")
 	}
@@ -83,7 +83,7 @@ func (g *globals) scale(cmd *cobra.Command, args []string, want int64, mode muta
 	have, _, _ := unstructured.NestedInt64(cur.Object, "spec", "replicas")
 
 	applyLine := t.command(g, "scale", t.hint(), "--replicas", strconv.FormatInt(want, 10))
-	return g.runMutation(cmd, f, mutation{
+	return g.runMutation(ctx, cmd, f, mutation{
 		plan: mutate.Plan{Operation: "scale", Target: t.id(), Scope: t.scope(), Changes: scaleChanges(have, want)},
 		mode: mode, tolerant: preview, verb: "update", t: t,
 		exec: func(ctx context.Context, dry bool) (mutationResult, error) {
@@ -116,9 +116,15 @@ func scaleChanges(have, want int64) []string {
 }
 
 // hasScale reports whether discovery lists a scale subresource for r.
-func (c *Clients) hasScale(r Resource) (bool, error) {
+func (c *Clients) hasScale(ctx context.Context, r Resource) (bool, error) {
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
 	l, err := c.Discovery.ServerResourcesForGroupVersion(r.GVR.GroupVersion().String())
 	if err != nil {
+		return false, err
+	}
+	if err := ctx.Err(); err != nil {
 		return false, err
 	}
 	for _, ar := range l.APIResources {

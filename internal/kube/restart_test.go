@@ -50,10 +50,11 @@ func TestRestartApplies(t *testing.T) {
 		gvr  schema.GroupVersionResource
 		name string
 		want string
+		hint string
 	}{
-		{[]string{"rollout", "restart", "deploy/web"}, deployGVR, "web", "deployment/web"},
-		{[]string{"rollout", "restart", "sts", "db"}, stsGVR, "db", "statefulset/db"},
-		{[]string{"rollout", "restart", "daemonsets/agent"}, dsGVR, "agent", "daemonset/agent"},
+		{[]string{"rollout", "restart", "deploy/web"}, deployGVR, "web", "deployment/web", "deployments.v1.apps/web"},
+		{[]string{"rollout", "restart", "sts", "db"}, stsGVR, "db", "statefulset/db", "statefulsets.v1.apps/db"},
+		{[]string{"rollout", "restart", "daemonsets/agent"}, dsGVR, "agent", "daemonset/agent", "daemonsets.v1.apps/agent"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.want, func(t *testing.T) {
@@ -80,6 +81,10 @@ func TestRestartApplies(t *testing.T) {
 			got, _, _ := unstructured.NestedString(e.object(tc.gvr, "default", tc.name).Object, "spec", "template", "metadata", "annotations", restartedAtKey)
 			if got != stamp {
 				t.Errorf("stored annotation = %q", got)
+			}
+			next := docs[1]["next"].([]any)
+			if len(next) != 2 || next[0] != "k8s-axi inspect "+tc.hint+" -n default" || next[1] != "k8s-axi events "+tc.hint+" -n default" {
+				t.Errorf("next = %v", next)
 			}
 			if len(e.patches) != 1 || e.patches[0] != `{"spec":{"template":{"metadata":{"annotations":{"kubectl.kubernetes.io/restartedAt":"`+stamp+`"}}}}}` {
 				t.Errorf("patches = %v", e.patches)

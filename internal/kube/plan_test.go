@@ -21,7 +21,7 @@ func TestPlanScaleChangesNothing(t *testing.T) {
 		t.Errorf("result = %v", r)
 	}
 	next := res["next"].([]any)
-	if len(next) != 1 || next[0] != "k8s-axi scale deployments.apps/web --replicas 0 -n default" {
+	if len(next) != 1 || next[0] != "k8s-axi scale deployments.v1.apps/web --replicas 0 -n default" {
 		t.Errorf("next = %v", next)
 	}
 	if got := e.replicas(deployGVR, "default", "web"); got != 3 {
@@ -51,7 +51,7 @@ func TestPlanRestartChangesNothing(t *testing.T) {
 	}
 	docs := jsonDocs(t, out)
 	next := docs[1]["next"].([]any)
-	if docs[0]["plan"].(map[string]any)["mode"] != "dry-run" || len(next) != 1 || next[0] != "k8s-axi rollout restart statefulsets.apps/db -n default" {
+	if docs[0]["plan"].(map[string]any)["mode"] != "dry-run" || len(next) != 1 || next[0] != "k8s-axi rollout restart statefulsets.v1.apps/db -n default" {
 		t.Errorf("docs = %v", docs)
 	}
 	if len(e.patches) != 0 || len(e.dryRuns) != 1 {

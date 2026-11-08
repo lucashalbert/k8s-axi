@@ -66,13 +66,9 @@ type mutationTarget struct {
 // id is the plan's Target, for example "deployment/web".
 func (t mutationTarget) id() string { return strings.ToLower(t.r.Kind) + "/" + t.name }
 
-// hint is KIND/NAME in the form the commands accept back.
+// hint is RESOURCE/NAME in the fully resolved form commands accept back.
 func (t mutationTarget) hint() string {
-	kind := t.r.GVR.Resource
-	if t.r.GVR.Group != "" {
-		kind += "." + t.r.GVR.Group
-	}
-	return kind + "/" + t.name
+	return t.r.String() + "/" + t.name
 }
 
 // apiTarget names the object in an error.
@@ -99,7 +95,7 @@ func (t mutationTarget) command(g *globals, parts ...string) string {
 
 // prepare reads the target from args, resolves it and checks the namespace.
 // accept may reject a kind the command does not handle.
-func (g *globals) prepare(cmd *cobra.Command, args []string, accept func(Resource) error) (mutationTarget, error) {
+func (g *globals) prepare(ctx context.Context, cmd *cobra.Command, args []string, accept func(Resource) error) (mutationTarget, error) {
 	kind, name, err := splitTarget(args)
 	if err != nil {
 		return mutationTarget{}, err
@@ -107,12 +103,21 @@ func (g *globals) prepare(cmd *cobra.Command, args []string, accept func(Resourc
 	if name == "" {
 		return mutationTarget{}, axierr.Usage(cmd.CommandPath(), "a name is required", "write the target as 'deployment/web' or 'deployment web'")
 	}
+	if err := ctx.Err(); err != nil {
+		return mutationTarget{}, err
+	}
 	c, err := g.clients()
 	if err != nil {
 		return mutationTarget{}, err
 	}
+	if err := ctx.Err(); err != nil {
+		return mutationTarget{}, err
+	}
 	r, err := c.Resolve(kind)
 	if err != nil {
+		return mutationTarget{}, err
+	}
+	if err := ctx.Err(); err != nil {
 		return mutationTarget{}, err
 	}
 	if err := accept(r); err != nil {
@@ -162,9 +167,7 @@ type mutation struct {
 
 // runMutation authorizes, prints the plan (target first) and carries it out
 // through mutate.Run, then prints the result.
-func (g *globals) runMutation(cmd *cobra.Command, f output.Format, m mutation) error {
-	ctx, cancel := g.bounded(cmd.Context())
-	defer cancel()
+func (g *globals) runMutation(ctx context.Context, cmd *cobra.Command, f output.Format, m mutation) error {
 	out := cmd.OutOrStdout()
 	finish := func(dry bool, status, note string) error {
 		res, err := m.exec(ctx, dry)

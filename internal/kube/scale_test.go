@@ -24,11 +24,12 @@ func TestScaleApplies(t *testing.T) {
 		gvr  schema.GroupVersionResource
 		name string
 		want string // plan target
+		hint string
 	}{
-		{[]string{"scale", "deploy/web", "--replicas", "5"}, deployGVR, "web", "deployment/web"},
-		{[]string{"scale", "statefulset", "db", "--replicas", "4"}, stsGVR, "db", "statefulset/db"},
-		{[]string{"scale", "rs/rs", "--replicas", "2"}, rsGVR, "rs", "replicaset/rs"},
-		{[]string{"scale", "gadgets/g", "--replicas", "7"}, gadgetGVR, "g", "gadget/g"},
+		{[]string{"scale", "deploy/web", "--replicas", "5"}, deployGVR, "web", "deployment/web", "deployments.v1.apps/web"},
+		{[]string{"scale", "statefulset", "db", "--replicas", "4"}, stsGVR, "db", "statefulset/db", "statefulsets.v1.apps/db"},
+		{[]string{"scale", "rs/rs", "--replicas", "2"}, rsGVR, "rs", "replicaset/rs", "replicasets.v1.apps/rs"},
+		{[]string{"scale", "gadgets/g", "--replicas", "7"}, gadgetGVR, "g", "gadget/g", "gadgets.v1.example.com/g"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.want, func(t *testing.T) {
@@ -56,6 +57,10 @@ func TestScaleApplies(t *testing.T) {
 			want := e.replicas(tc.gvr, "default", tc.name)
 			if float64(want) != res["replicas"] {
 				t.Errorf("stored %d, result %v", want, res["replicas"])
+			}
+			next := docs[1]["next"].([]any)
+			if len(next) != 2 || next[0] != "k8s-axi inspect "+tc.hint+" -n default" || next[1] != "k8s-axi events "+tc.hint+" -n default" {
+				t.Errorf("next = %v", next)
 			}
 			if len(e.dryRuns) != 0 {
 				t.Errorf("unexpected dry-run requests: %v", e.dryRuns)
