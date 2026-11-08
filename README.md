@@ -20,9 +20,34 @@ go install github.com/lucashalbert/k8s-axi/cmd/k8s-axi@latest
 k8s-axi cluster info                  # context, API server, server version, namespace
 k8s-axi discover --kind deploy        # kinds the cluster serves, built-in and custom
 k8s-axi discover --group apps --full  # more columns
+k8s-axi get pods -n kube-system       # compact table, any kind: pods, deploy, widgets.example.com
+k8s-axi get deploy -A -l app=web      # all namespaces, label selector (also --field-selector)
+k8s-axi inspect pod web-6d5f8         # key facts, conditions, owner chain, newest events
+k8s-axi events -n prod --type Warning # newest first; add pod/web-6d5f8 for one object
+k8s-axi logs deploy/web --since 15m   # bounded, redacted; -c, --previous, --tail, -l
 k8s-axi version
 k8s-axi update                        # install the latest release, verifying its SHA-256 checksum
 ```
+
+Read commands:
+
+- `get KIND [NAME]` lists a kind, or reads one object, as a few columns per kind.
+  `KIND` is a plural, singular, kind or short name, optionally qualified as `resource.version.group` or `group/version/resource`.
+  Kinds are resolved through live discovery, so CRDs and kinds served only in a non-preferred version work.
+  Built-in kinds are read through typed clients and everything else through the dynamic client.
+- `inspect KIND NAME` summarises one object: per-kind facts, conditions, the owner chain, and the newest events about it.
+  `--labels` and `--annotations` add those maps.
+- `events [KIND NAME]` shows events for a namespace (`-A` for all) or one object, newest first, with a warning count.
+- `logs [TARGET]` reads a pod, or the pods of a deployment, statefulset, daemonset, replicaset or job (`KIND/NAME`), or pods chosen with `-l`.
+
+Every list states `count` and `truncated`, empty results say what was searched, and each result ends with next-step commands.
+Lists are cut at `--limit` rows (default 50, `0` for no limit), events are read up to 1000 per call, and logs are bounded by `--tail` (default 100 lines per container) and `--max-bytes` (default 64 KiB in total) over at most 5 pods.
+`--full` prints complete objects.
+
+Secret values are never printed, and there is no flag that reveals them: `get` and `inspect` show a Secret's type and key names with sizes only, also with `--full`, `--json` and `--yaml`.
+Full objects also drop `managedFields` and the `last-applied-configuration` annotation, mask credential-looking env literals and ConfigMap keys, and mask secret-shaped strings.
+Log text is redacted for bearer tokens, JWTs, `token=`/`password=` pairs, URL passwords and private keys, and the result says how many values were replaced.
+Redaction is pattern based, so treat logs as best effort.
 
 Global flags: `--context`, `--kubeconfig`, `-n/--namespace`, `--json`, `--yaml`, `--full`, `--limit`, `--timeout`.
 Each has a `K8S_AXI_<NAME>` environment variable, and `KUBECONFIG` keeps its standard meaning.

@@ -146,11 +146,11 @@ next[2]: k8s-axi events pod web-6d5f8 -n default | k8s-axi logs pod/web-6d5f8 -n
 
 | Kind | Fields |
 |---|---|
-| Pod | `phase, node, pod_ip, qos, containers[name,image,ready,state,restarts]` |
+| Pod | `status, node, pod_ip, qos, containers[name,image,ready,state,restarts]` (`status` is the kubectl-style STATUS) |
 | Deployment, StatefulSet, ReplicaSet | `desired, ready, available, updated, strategy, selector` |
 | DaemonSet | `desired, ready, available, updated, selector` |
 | Job | `completions, succeeded, failed, active` |
-| Node | `ready, roles, version, os, capacity, allocatable, taints` |
+| Node | `status, roles, version, os, capacity, allocatable, taints` |
 | Service | `type, cluster_ip, ports, selector` |
 | ConfigMap, Secret | `type (Secret), keys[name,bytes]` |
 | anything else | top-level scalar fields of `spec` and `status`, at most 20, with a `note` pointing to `--full` |
@@ -193,7 +193,7 @@ k8s-axi logs [TARGET] [-n NS] [-c CONTAINER] [-l SELECTOR] [--previous] [--tail 
 A workload resolves to its pods through `spec.selector` (a Job also by its `batch.kubernetes.io/job-name` label).
 `-l SELECTOR` with no target selects pods directly.
 
-- Defaults: `--tail 100` lines per container (0 means all), `--max-bytes 65536` across the whole response.
+- Defaults: `--tail 100` lines per container (0 means up to 10000, at most 10000 allowed), `--max-bytes 65536` across the whole response.
 - At most 5 pods are read (first by name).
   The note says how many matched and to name a pod or narrow `-l` to see others.
 - Without `-c`, every regular container of each pod is read (init containers only when named with `-c`).
@@ -234,6 +234,8 @@ All in `internal/kube`, one file per concern, tests next to them:
 | `scrub.go` | the scrubbing described above, Secret key and size summary |
 | `apierr.go` | API error to `axierr` with hints |
 | `rows.go` | row types, age formatting, per-kind summaries |
+| `details.go` | per-kind summaries and conditions for inspect |
+| `common.go` | namespace scoping, argument-count usage errors, next-step command lines |
 | `get.go`, `inspect.go`, `events.go`, `logs.go` | the commands |
 
 `Load` wraps the mapper with the short-name expander.
@@ -270,6 +272,6 @@ Each task is test first, then code, then one conventional commit.
 
 - Typed clients for 17 kinds add conversion code that the dynamic client alone would not need (my call: kept because the design and PRD ask for typed clients for built-ins, and it keeps list pagination and decoding on the well-trodden path for the common kinds).
 - Events cannot be sorted or limited by the server in a way that returns the newest, so the 1000-event read cap is the honest bound (my call).
-- Log byte limits are enforced after reading a bounded stream: each container is read with a hard cap of `max-bytes + 1` requested lines or bytes, so a chatty container cannot make the command read an unbounded stream.
+- Each container is read with `tail + 1` requested lines (the extra line shows that older lines exist) and a 4 MiB read limit, then cut to the byte budget here, so a chatty container cannot make the command read an unbounded stream.
 - `redact.Mask` is pattern based and cannot catch every secret.
   Logs are best-effort redacted and the output says how many replacements were made.
