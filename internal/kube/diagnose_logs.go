@@ -58,10 +58,10 @@ func logSelFor(pod string, cs map[string]any) (logSel, bool) {
 	cur, last := dict(cs, "state", "terminated"), dict(cs, "lastState", "terminated")
 	running := dict(cs, "state", "running") != nil
 	switch {
-	case cur != nil && num(cur, "exitCode") != 0:
-		return logSel{pod, name, false, 0}, true
 	case str(dict(cs, "state", "waiting"), "reason") == "CrashLoopBackOff", last != nil && num(last, "exitCode") != 0 && num(cs, "restartCount") > 0 && !running:
 		return logSel{pod, name, true, 0}, true
+	case cur != nil && num(cur, "exitCode") != 0:
+		return logSel{pod, name, false, 0}, true
 	case last != nil && num(last, "exitCode") != 0 && num(cs, "restartCount") > 0:
 		return logSel{pod, name, true, 1}, true
 	case running && cs["ready"] == false:
