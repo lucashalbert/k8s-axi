@@ -341,12 +341,34 @@ func shapeLog(raw string, tail, budget int) (lines []string, truncated bool, red
 	if keep > 0 {
 		truncated = true
 		if keep == len(lines) { // even the newest line is over budget
-			lines = []string{truncate(lines[len(lines)-1], budget)}
+			lines = []string{truncateBytes(lines[len(lines)-1], budget)}
 			return lines, true, redacted
 		}
 		lines = lines[keep:]
 	}
 	return lines, truncated, redacted
+}
+
+func truncateBytes(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	const ellipsis = "…"
+	if n < len(ellipsis) {
+		return ""
+	}
+	if n == len(ellipsis) {
+		return ellipsis
+	}
+	maxPrefix := n - len(ellipsis)
+	limit := 0
+	for i := range s {
+		if i > maxPrefix {
+			break
+		}
+		limit = i
+	}
+	return s[:limit] + ellipsis
 }
 
 func logsNote(out logsOut, matched, shown, skippedStreams int, o logOpts) string {

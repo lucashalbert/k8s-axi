@@ -6,6 +6,7 @@ import (
 	"io"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"context"
 	appsv1 "k8s.io/api/apps/v1"
@@ -206,8 +207,15 @@ func TestShapeLogByteBudget(t *testing.T) {
 		t.Errorf("lines=%d truncated=%v", len(lines), truncated)
 	}
 	lines, truncated, _ = shapeLog(strings.Repeat("y", 5000)+"\n", 1000, 1024)
-	if !truncated || len(lines) != 1 || len([]rune(lines[0])) > 1024 || !strings.HasSuffix(lines[0], "…") {
-		t.Errorf("one oversized line: %d lines, %d runes", len(lines), len([]rune(lines[0])))
+	if !truncated || len(lines) != 1 || len(lines[0]) > 1024 || !strings.HasSuffix(lines[0], "…") {
+		t.Errorf("one oversized line: %d lines, %d bytes", len(lines), len(lines[0]))
+	}
+	lines, truncated, _ = shapeLog(strings.Repeat("界", 2000)+"\n", 1000, 1024)
+	if !truncated || len(lines) != 1 || len(lines[0]) > 1024 || !strings.HasSuffix(lines[0], "…") {
+		t.Errorf("one oversized multibyte line: %d lines, %d bytes", len(lines), len(lines[0]))
+	}
+	if !utf8.ValidString(lines[0]) {
+		t.Errorf("one oversized multibyte line is not valid UTF-8")
 	}
 	if lines, truncated, _ := shapeLog("", 10, 1024); len(lines) != 0 || truncated {
 		t.Errorf("empty: %v %v", lines, truncated)
