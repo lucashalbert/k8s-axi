@@ -152,7 +152,7 @@ func conclusionOf(fs []finding) string {
 	if len(fs) == 0 {
 		return "no problems found in the checked evidence"
 	}
-	c := fmt.Sprintf("%s (%s)", fs[0].Summary, fs[0].Subject)
+	c := fmt.Sprintf("%s: %s", fs[0].Summary, fs[0].Subject)
 	switch n := len(fs) - 1; {
 	case n == 1:
 		c += "; 1 more finding"
