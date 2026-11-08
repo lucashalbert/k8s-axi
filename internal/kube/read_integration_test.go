@@ -340,11 +340,10 @@ func TestReadCoreLogsPreviousOfARestartedContainer(t *testing.T) {
 		for _, l := range rowsOf(rowsOf(m, "streams")[0], "log") {
 			lines = append(lines, l["line"].(string))
 		}
-		return len(lines) > 0
+		// The kubelet answers a log read made just after a restart with an error text
+		// as the body, so wait for the real line.
+		return len(lines) > 0 && lines[0] == "first-run-line"
 	})
-	if lines[0] != "first-run-line" {
-		t.Errorf("previous log = %v", lines)
-	}
 }
 
 func TestReadCoreForbiddenIsAStructuredError(t *testing.T) {
