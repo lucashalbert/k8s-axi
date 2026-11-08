@@ -390,3 +390,24 @@ func TestLogsManyPodsIsBounded(t *testing.T) {
 		t.Errorf("printed %d bytes for a %d byte budget (stderr %s)", len(out), defaultMaxSize, errOut)
 	}
 }
+
+func BenchmarkDiagnoseManyPods(b *testing.B) {
+	stubDiagLogs(b, func(context.Context, string, string, bool) (string, error) { return "x\n", nil })
+	ds := typed[appsv1.DaemonSet](b, `
+apiVersion: apps/v1
+kind: DaemonSet
+metadata: {name: agent, namespace: default, uid: uid-ds}
+spec: {selector: {matchLabels: {app: crash}}}
+status: {desiredNumberScheduled: 5000, numberReady: 0}`)
+	c, cs := readFixture(b, []runtime.Object{ds})
+	servePaged(cs, "pods", 5000, func() runtime.Object { return &corev1.PodList{} },
+		func(i int) runtime.Object { return crashLoopPod(b, fmt.Sprintf("p-%04d", i), fmt.Sprintf("c-%04d", i)) })
+	b.ReportAllocs()
+	for b.Loop() {
+		root, _, _ := testRoot(b, c, nil)
+		root.SetArgs([]string{"diagnose", "daemonset", "agent", "--json"})
+		if err := root.Execute(); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
