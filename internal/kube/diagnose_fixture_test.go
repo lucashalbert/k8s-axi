@@ -62,3 +62,38 @@ func find(fs []finding, rule string) *finding {
 	}
 	return nil
 }
+
+// podFix is a pod named name with one container "app" (image registry.test/app:1,
+// memory limit 64Mi, cpu request 500m) and the given status fragment, which is
+// indented YAML under "status:".
+func podFix(t *testing.T, name, status string) unstructured.Unstructured {
+	t.Helper()
+	return obj(t, `
+apiVersion: v1
+kind: Pod
+metadata: {name: `+name+`, namespace: default, uid: uid-`+name+`}
+spec:
+  nodeName: node-1
+  containers:
+  - name: app
+    image: registry.test/app:1
+    resources:
+      limits: {memory: 64Mi}
+      requests: {cpu: 500m, memory: 32Mi}
+status:
+`+status)
+}
+
+func snapOf(t *testing.T, resource string, target *unstructured.Unstructured, pods ...unstructured.Unstructured) *snapshot {
+	t.Helper()
+	freezeClock(t)
+	r := map[string]Resource{
+		"pods":         {GVR: gvr("", "v1", "pods"), Kind: "Pod", Namespaced: true},
+		"services":     {GVR: gvr("", "v1", "services"), Kind: "Service", Namespaced: true},
+		"deployments":  {GVR: gvr("apps", "v1", "deployments"), Kind: "Deployment", Namespaced: true},
+		"statefulsets": {GVR: gvr("apps", "v1", "statefulsets"), Kind: "StatefulSet", Namespaced: true},
+		"daemonsets":   {GVR: gvr("apps", "v1", "daemonsets"), Kind: "DaemonSet", Namespaced: true},
+		"jobs":         {GVR: gvr("batch", "v1", "jobs"), Kind: "Job", Namespaced: true},
+	}[resource]
+	return &snapshot{Resource: r, Target: target, Pods: pods, Nodes: map[string]*unstructured.Unstructured{}}
+}
