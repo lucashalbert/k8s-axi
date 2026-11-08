@@ -240,8 +240,15 @@ func TestGetClusterScopedNameIgnoresAllNamespaces(t *testing.T) {
 	if m["count"] != float64(1) || items(m)[0]["name"] != "n1" || m["namespace"] != nil {
 		t.Errorf("node read with -A: %v", m)
 	}
+	m = runJSON(t, c, "get", "node", "n1", "-n", "default", "-A")
+	if m["count"] != float64(1) || items(m)[0]["name"] != "n1" || m["namespace"] != nil {
+		t.Errorf("node read with -n and -A: %v", m)
+	}
 	if code, _, _ := run(t, c, "get", "pod", "a", "-A"); code != 2 {
 		t.Errorf("namespaced object with -A exit %d, want 2", code)
+	}
+	if code, _, _ := run(t, c, "get", "pods", "-n", "x", "-A"); code != 2 {
+		t.Errorf("namespaced list with -n and -A exit %d, want 2", code)
 	}
 }
 

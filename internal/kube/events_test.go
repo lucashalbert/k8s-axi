@@ -123,6 +123,10 @@ func TestEventsForClusterScopedObjectSearchAllNamespaces(t *testing.T) {
 	if got := strings.Join(reasons(m), ","); got != "NodeReady" {
 		t.Errorf("events = %s", got)
 	}
+	m = runJSON(t, c, "events", "node/n1", "-n", "default", "-A")
+	if got := strings.Join(reasons(m), ","); got != "NodeReady" || m["scope"] != "node/n1" {
+		t.Errorf("events with ignored namespace flags: scope=%v events=%s", m["scope"], got)
+	}
 }
 
 func TestEventsFilters(t *testing.T) {

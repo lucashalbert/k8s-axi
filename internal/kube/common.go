@@ -9,9 +9,12 @@ import (
 	"github.com/lucashalbert/axi-sdk-go/axierr"
 )
 
-// scopeNamespace is the namespace a command reads: empty for all namespaces.
-// -n together with -A is ambiguous and rejected.
-func scopeNamespace(cmd *cobra.Command, c *Clients, all bool) (string, error) {
+// scopeNamespace is the namespace a command reads: empty for all namespaces or
+// cluster-scoped resources. -n together with -A is ambiguous for namespaced resources.
+func scopeNamespace(cmd *cobra.Command, c *Clients, all, namespaced bool) (string, error) {
+	if !namespaced {
+		return "", nil
+	}
 	if !all {
 		return c.Namespace, nil
 	}

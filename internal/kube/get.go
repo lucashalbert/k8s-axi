@@ -59,7 +59,7 @@ func (g *globals) getCmd() *cobra.Command {
 			if name != "" && all && r.Namespaced {
 				return axierr.Usage("get", "a namespaced object name cannot be combined with -A", "drop the name to list across namespaces, or drop -A to read one object")
 			}
-			ns, err := scopeNamespace(cmd, c, all)
+			ns, err := scopeNamespace(cmd, c, all, r.Namespaced)
 			if err != nil {
 				return err
 			}

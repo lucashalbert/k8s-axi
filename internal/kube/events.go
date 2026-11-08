@@ -254,7 +254,16 @@ func (g *globals) eventsCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			ns, err := scopeNamespace(cmd, c, all)
+			var r Resource
+			namespaced := true
+			if kind != "" {
+				r, err = c.Resolve(kind)
+				if err != nil {
+					return err
+				}
+				namespaced = r.Namespaced
+			}
+			ns, err := scopeNamespace(cmd, c, all, namespaced)
 			if err != nil {
 				return err
 			}
@@ -264,10 +273,6 @@ func (g *globals) eventsCmd() *cobra.Command {
 				scope = "all namespaces"
 			}
 			if kind != "" {
-				r, err := c.Resolve(kind)
-				if err != nil {
-					return err
-				}
 				q.Kind, q.Name = r.Kind, name
 				if !r.Namespaced {
 					q.Namespace = ""
