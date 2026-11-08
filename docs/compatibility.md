@@ -31,7 +31,7 @@ The kind matrix runs `get`, `inspect`, `events`, `logs` and `diagnose` against e
 
 `diagnose` is exercised against a pod that cannot pull its image, an unschedulable pod, a crash loop with its previous log, a failed Job, a failing readiness probe, services with a selector typo and with no ready endpoints, a Deployment over a ResourceQuota, and healthy workloads of every supported kind.
 Its rules read documented status fields and conditions, plus the wording of a few scheduler, kubelet and controller messages, so a change in that wording only costs an inferred cause finding and never the observed finding next to it.
-It also uses stable surfaces only: list and get of pods, replica sets, nodes, resource quotas, endpoint slices and events, and pod logs.
+It also uses stable surfaces only: get for the target and owner chain, list and get for pods, replica sets, nodes, resource quotas, endpoint slices and events, and pod logs.
 
 The mutation tests add, on every minor: `scale` of a deployment (up, to zero, no-op), of a statefulset and of a custom resource that declares a scale subresource, `--dry-run=server` and `plan` leaving the object untouched, `rollout restart` replacing a deployment's pod and annotating a statefulset and a daemonset, a service account that may only read getting the structured `RBAC denied` error for each mutation, and the kubeconfig and its current context staying byte-for-byte unchanged.
 Mutations use only the `scale` subresource, a JSON merge patch of one pod template annotation, and `dryRun=All`, all stable in the supported range.
