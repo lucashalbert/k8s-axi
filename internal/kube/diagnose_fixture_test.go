@@ -11,14 +11,9 @@ import (
 )
 
 // diagNow is the fixed clock of the diagnose tests.
-var diagNow = time.Date(2026, 11, 7, 12, 0, 0, 0, time.UTC)
+var diagNow = fixedNow
 
-func freezeClock(t *testing.T) {
-	t.Helper()
-	old := now
-	now = func() time.Time { return diagNow }
-	t.Cleanup(func() { now = old })
-}
+func freezeClock(t *testing.T) { freezeTime(t) }
 
 // obj parses a YAML fixture into an unstructured object.
 func obj(t *testing.T, y string) unstructured.Unstructured {
