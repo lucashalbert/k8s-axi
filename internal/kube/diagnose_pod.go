@@ -164,7 +164,7 @@ func (s *snapshot) containerFindings(p *unstructured.Unstructured, subject strin
 	case containerErrorReasons[reason]:
 		out = append(out, newFinding("container-error", sevCritical, basisObserved, subject, name+"/"+reason,
 			fmt.Sprintf("container %s cannot be started (%s)", name, reason), s.text(fmt.Sprintf("waiting: %s: %s", reason, str(wait, "message")))))
-	case reason == "CrashLoopBackOff":
+	case reason == "CrashLoopBackOff", last != nil && num(last, "exitCode") != 0 && restarts > 0 && !running:
 		ev := []string{fmt.Sprintf("restarts: %d", restarts)}
 		if last != nil {
 			ev = append(ev, "last termination: "+termText(last))

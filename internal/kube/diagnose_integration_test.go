@@ -77,7 +77,14 @@ func TestDiagnoseImagePullAndUnschedulable(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	m := diagUntil(t, "the image pull failure to be diagnosed", 180*time.Second, []string{"deploy/bad", "-n", ns}, hasRule("image-pull"))
+	m := diagUntil(t, "both image pull failures to be diagnosed", 180*time.Second, []string{"deploy/bad", "-n", ns}, func(m map[string]any) bool {
+		f := ruleOf(m, "image-pull")
+		if f == nil || f["count"] != float64(2) {
+			return false
+		}
+		pods := m["pods"].(map[string]any)
+		return pods["total"] == float64(2) && pods["unhealthy"] == float64(2)
+	})
 	f := ruleOf(m, "image-pull")
 	if m["status"] != "unhealthy" || f["basis"] != "observed" || f["severity"] != "critical" || f["count"] != float64(2) || !evidenceHas(f, "registry.invalid/nope:1") {
 		t.Errorf("deployment diagnosis: %v", m)
