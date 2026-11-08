@@ -80,6 +80,18 @@ func waitForPodLogLine(t *testing.T, c *Clients, ns, pod, container string, prev
 	})
 }
 
+func waitForRestartedPod(t *testing.T, ns, pod string, within time.Duration) {
+	t.Helper()
+	eventually(t, "pod "+pod+" to show a restarted failure", within, func() bool {
+		m := itTry("get", "pods", pod, "-n", ns)
+		if m == nil {
+			return false
+		}
+		rows := rowsOf(m, "items")
+		return len(rows) == 1 && rows[0]["restarts"].(float64) >= 1 && rows[0]["status"] != "Running"
+	})
+}
+
 // itJSON runs a command that must succeed and returns its JSON output.
 func itJSON(t *testing.T, args ...string) map[string]any {
 	t.Helper()
@@ -346,10 +358,7 @@ func TestReadCoreLogsPreviousOfARestartedContainer(t *testing.T) {
 	if _, err := c.Typed.CoreV1().Pods(ns).Create(context.Background(), pod, metav1.CreateOptions{}); err != nil {
 		t.Fatal(err)
 	}
-	eventually(t, "the container to restart", 180*time.Second, func() bool {
-		rows := rowsOf(itTry("get", "pods", "-n", ns), "items")
-		return len(rows) == 1 && rows[0]["restarts"].(float64) >= 1
-	})
+	waitForRestartedPod(t, ns, "crasher", 180*time.Second)
 	waitForPodLogLine(t, c, ns, "crasher", "app", true, 60*time.Second, "first-run-line")
 	var lines []string
 	m := itJSON(t, "logs", "crasher", "--previous", "-n", ns)
