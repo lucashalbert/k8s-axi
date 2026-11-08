@@ -3,9 +3,15 @@ package kube
 import (
 	"strings"
 	"testing"
+	"time"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/discovery/cached/memory"
+	fakediscovery "k8s.io/client-go/discovery/fake"
+	"k8s.io/client-go/restmapper"
+	clienttesting "k8s.io/client-go/testing"
 )
 
 func scaleEnv(t *testing.T) *mutEnv {
@@ -206,6 +212,45 @@ func TestScaleTOON(t *testing.T) {
 			t.Errorf("TOON output lacks %q:\n%s", want, out)
 		}
 	}
+}
+
+func TestScaleResolveDiscoveryRespectsCommandTimeout(t *testing.T) {
+	e := scaleEnv(t)
+	cached := memory.NewMemCacheClient(e.c.Discovery)
+	e.c.Mapper = restmapper.NewShortcutExpander(restmapper.NewDeferredDiscoveryRESTMapper(cached), cached, func(string) {})
+	blockDiscovery(e.c, 500*time.Millisecond)
+
+	start := time.Now()
+	code, out, errOut := run(t, e.c, "scale", "deploy/web", "--replicas", "5", "-n", "default", "--timeout", "20ms")
+	elapsed := time.Since(start)
+	if code != 1 || out != "" || !strings.Contains(errOut, "raise --timeout") {
+		t.Fatalf("exit %d, stdout %q, stderr %s", code, out, errOut)
+	}
+	if elapsed >= 250*time.Millisecond {
+		t.Fatalf("timeout took %v, want less than stalled discovery", elapsed)
+	}
+}
+
+func TestScaleSubresourceDiscoveryRespectsCommandTimeout(t *testing.T) {
+	e := scaleEnv(t)
+	blockDiscovery(e.c, 500*time.Millisecond)
+
+	start := time.Now()
+	code, out, errOut := run(t, e.c, "scale", "deploy/web", "--replicas", "5", "-n", "default", "--timeout", "20ms")
+	elapsed := time.Since(start)
+	if code != 1 || out != "" || !strings.Contains(errOut, "raise --timeout") {
+		t.Fatalf("exit %d, stdout %q, stderr %s", code, out, errOut)
+	}
+	if elapsed >= 250*time.Millisecond {
+		t.Fatalf("timeout took %v, want less than stalled discovery", elapsed)
+	}
+}
+
+func blockDiscovery(c *Clients, delay time.Duration) {
+	c.Discovery.(*fakediscovery.FakeDiscovery).PrependReactor("get", "resource", func(clienttesting.Action) (bool, runtime.Object, error) {
+		time.Sleep(delay)
+		return false, nil, nil
+	})
 }
 
 // A controller writes the workload's status all the time, which changes its

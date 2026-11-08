@@ -2,6 +2,7 @@ package kube
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -52,6 +53,30 @@ func (g *globals) bounded(ctx context.Context) (context.Context, context.CancelF
 		return ctx, func() {}
 	}
 	return context.WithTimeout(ctx, g.timeout)
+}
+
+type contextCallResult[T any] struct {
+	value T
+	err   error
+}
+
+func withContext[T any](ctx context.Context, call func() (T, error)) (T, error) {
+	if err := ctx.Err(); err != nil {
+		var zero T
+		return zero, err
+	}
+	done := make(chan contextCallResult[T], 1)
+	go func() {
+		value, err := call()
+		done <- contextCallResult[T]{value: value, err: err}
+	}()
+	select {
+	case result := <-done:
+		return result.value, result.err
+	case <-ctx.Done():
+		var zero T
+		return zero, ctx.Err()
+	}
 }
 
 // mutationTarget is the object a mutation acts on, resolved and scoped.
@@ -113,8 +138,11 @@ func (g *globals) prepare(ctx context.Context, cmd *cobra.Command, args []string
 	if err := ctx.Err(); err != nil {
 		return mutationTarget{}, err
 	}
-	r, err := c.Resolve(kind)
+	r, err := c.ResolveContext(ctx, kind)
 	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) {
+			return mutationTarget{}, apiError("resolve kind", "context/"+c.Context+" "+kind, err, "get", "discovery")
+		}
 		return mutationTarget{}, err
 	}
 	if err := ctx.Err(); err != nil {

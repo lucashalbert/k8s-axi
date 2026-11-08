@@ -9,6 +9,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/client-go/discovery"
 
 	"github.com/lucashalbert/axi-sdk-go/axierr"
 	"github.com/lucashalbert/axi-sdk-go/cli"
@@ -120,7 +121,10 @@ func (c *Clients) hasScale(ctx context.Context, r Resource) (bool, error) {
 	if err := ctx.Err(); err != nil {
 		return false, err
 	}
-	l, err := c.Discovery.ServerResourcesForGroupVersion(r.GVR.GroupVersion().String())
+	dc := discovery.ToDiscoveryInterfaceWithContext(c.Discovery)
+	l, err := withContext(ctx, func() (*metav1.APIResourceList, error) {
+		return dc.ServerResourcesForGroupVersionWithContext(ctx, r.GVR.GroupVersion().String())
+	})
 	if err != nil {
 		return false, err
 	}
