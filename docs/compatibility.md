@@ -21,8 +21,13 @@ Kubernetes supports clients within one minor version of the API server, so a cli
 k8s-axi widens that window by not depending on a fixed resource list:
 
 - Resources are found at run time through API discovery.
-- Built-in and custom resources are read through the dynamic client, so a kind that is new or removed on one side does not need a code change.
-- Only stable, long-lived API surfaces (`/version`, `/api`, `/apis` discovery) are used by the commands in this release.
+- Resources outside the typed table are read through the dynamic client, so a kind that is new or removed on one side does not need a code change.
+- Kinds are resolved through the REST mapper built from live discovery, so a kind served only in a non-preferred version still resolves.
+- Typed clients are used only for `v1` APIs of long-lived built-in kinds (core, `apps`, `batch`, `discovery.k8s.io`), which exist in all five supported minors.
+- Everything else, including every CRD, goes through the dynamic client.
+- The commands use stable surfaces only: `/version`, `/api` and `/apis` discovery, list and get, pod logs, and core events.
+
+The kind matrix runs `get`, `inspect`, `events` and `logs` against every minor, including a CRD served in a non-preferred version, a Secret whose value must never appear in any output format, credential redaction in logs, `--previous` logs of a restarted container, and the structured error for a service account without permissions.
 
 Every supported minor is exercised by the kind matrix, so a regression against 1.33 to 1.35 is caught in CI rather than assumed away.
 Clusters outside the five supported minors may work but are not tested.

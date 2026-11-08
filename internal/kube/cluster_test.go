@@ -21,7 +21,14 @@ import (
 func testRoot(t *testing.T, c *Clients, loadErr error) (root *cobra.Command, stdout, stderr *bytes.Buffer) {
 	t.Helper()
 	t.Setenv("K8S_AXI_NO_UPDATE_CHECK", "1")
-	m := Module{load: func(Options) (*Clients, error) { return c, loadErr }}
+	m := Module{load: func(o Options) (*Clients, error) {
+		if c != nil && o.Namespace != "" { // like Load, -n overrides the context's namespace
+			cc := *c
+			cc.Namespace = o.Namespace
+			return &cc, loadErr
+		}
+		return c, loadErr
+	}}
 	root = cli.New("k8s-axi", update.Info{Version: "0.0.1"}, cli.EnvPrefix("K8S_AXI_"), m)
 	stdout, stderr = &bytes.Buffer{}, &bytes.Buffer{}
 	root.SetOut(stdout)

@@ -207,3 +207,5 @@ users:
 		t.Errorf("not bounded by --timeout: %v", d)
 	}
 }
+
+func jsonUnmarshal(s string, v any) error { return json.Unmarshal([]byte(s), v) }
