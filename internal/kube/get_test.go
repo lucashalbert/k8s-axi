@@ -16,6 +16,7 @@ import (
 	"k8s.io/utils/ptr"
 
 	"github.com/lucashalbert/axi-sdk-go/cli"
+	"github.com/lucashalbert/axi-sdk-go/redact"
 )
 
 var fixedNow = time.Date(2026, 11, 7, 12, 0, 0, 0, time.UTC)
@@ -240,8 +241,15 @@ func TestGetClusterScopedNameIgnoresAllNamespaces(t *testing.T) {
 	if m["count"] != float64(1) || items(m)[0]["name"] != "n1" || m["namespace"] != nil {
 		t.Errorf("node read with -A: %v", m)
 	}
+	m = runJSON(t, c, "get", "node", "n1", "-n", "default", "-A")
+	if m["count"] != float64(1) || items(m)[0]["name"] != "n1" || m["namespace"] != nil {
+		t.Errorf("node read with -n and -A: %v", m)
+	}
 	if code, _, _ := run(t, c, "get", "pod", "a", "-A"); code != 2 {
 		t.Errorf("namespaced object with -A exit %d, want 2", code)
+	}
+	if code, _, _ := run(t, c, "get", "pods", "-n", "x", "-A"); code != 2 {
+		t.Errorf("namespaced list with -n and -A exit %d, want 2", code)
 	}
 }
 
@@ -315,6 +323,32 @@ func TestGetSecretNeverLeaksInAnyFormat(t *testing.T) {
 			if strings.Contains(out+errOut, leak) {
 				t.Errorf("%v leaked %q:\n%s", args, leak, out)
 			}
+		}
+	}
+}
+
+func TestFullConfigMapMasksCredentialBinaryData(t *testing.T) {
+	freezeTime(t)
+	c, _ := readFixture(t, []runtime.Object{&corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "cfg"},
+		BinaryData: map[string][]byte{
+			"db_password": []byte("hunter2"),
+			"asset":       []byte("public"),
+		},
+	}})
+	for _, args := range [][]string{
+		{"get", "configmap", "cfg", "--full"},
+		{"inspect", "configmap", "cfg", "--full"},
+	} {
+		code, out, errOut := run(t, c, args...)
+		if code != 0 {
+			t.Fatalf("%v: exit %d: %s", args, code, errOut)
+		}
+		if strings.Contains(out, b64("hunter2")) || strings.Contains(out, "hunter2") {
+			t.Errorf("%v leaked credential binaryData:\n%s", args, out)
+		}
+		if !strings.Contains(out, redact.Placeholder) || !strings.Contains(out, b64("public")) {
+			t.Errorf("%v did not preserve expected full ConfigMap shape:\n%s", args, out)
 		}
 	}
 }

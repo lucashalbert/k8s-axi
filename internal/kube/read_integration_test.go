@@ -382,3 +382,109 @@ func TestReadCoreForbiddenIsAStructuredError(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestReadCoreHintsPodCapByteBudgetAndEventRedaction(t *testing.T) {
+	c, ns := itSetup(t)
+	ctx := context.Background()
+	for i := 1; i <= 7; i++ {
+		p := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("many-%d", i), Namespace: ns, Labels: map[string]string{"app": "many"}},
+			Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "app", Image: busybox,
+				Command: []string{"sh", "-c", `i=0; while [ $i -lt 20 ]; do echo "line $i ` + strings.Repeat("x", 90) + `"; i=$((i+1)); done; sleep 3600`}}}}}
+		if _, err := c.Typed.CoreV1().Pods(ns).Create(ctx, p, metav1.CreateOptions{}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	eventually(t, "the pods to be running", 180*time.Second, func() bool {
+		rows := rowsOf(itTry("get", "pods", "-l", "app=many", "-n", ns), "items")
+		if len(rows) != 7 {
+			return false
+		}
+		for _, r := range rows {
+			if r["status"] != "Running" {
+				return false
+			}
+		}
+		return true
+	})
+
+	// Next-step hints carry the cluster the command was pointed at.
+	m := itJSON(t, "get", "pods", "-n", ns, "--context", c.Context)
+	next, _ := m["next"].([]any)
+	if len(next) != 1 || !strings.HasPrefix(next[0].(string), "k8s-axi inspect pods many-1") ||
+		!strings.Contains(next[0].(string), " -n "+ns) || !strings.Contains(next[0].(string), " --context "+c.Context) {
+		t.Errorf("next = %v", next)
+	}
+
+	// The pod cap keeps the first five by name and says so; every selected container is read.
+	l := itJSON(t, "logs", "-l", "app=many", "-n", ns)
+	streams := rowsOf(l, "streams")
+	if l["pods"] != float64(7) || len(streams) != 5 || streams[0]["pod"] != "many-1" || streams[4]["pod"] != "many-5" || !strings.Contains(l["note"].(string), "showing 5 of 7 pods") {
+		t.Errorf("pod cap: %v", l)
+	}
+
+	// --max-bytes is a total across all streams.
+	l = itJSON(t, "logs", "-l", "app=many", "-n", ns, "--max-bytes", "1024")
+	streams = rowsOf(l, "streams")
+	total := 0
+	for _, s := range streams {
+		for _, ln := range rowsOf(s, "log") {
+			total += len(ln["line"].(string))
+		}
+	}
+	if len(streams) != 5 || total > 1024 || l["truncated"] != true {
+		t.Errorf("--max-bytes 1024: %d streams, %d bytes, truncated=%v", len(streams), total, l["truncated"])
+	}
+
+	// A secret-shaped event message is redacted wherever events are shown.
+	const secretMsg = "retrying with token=sentinelEventTok99 and Authorization: Bearer abcdefghijklmnop12345"
+	target, err := c.Typed.CoreV1().Pods(ns).Get(ctx, "many-1", metav1.GetOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ev := &corev1.Event{
+		ObjectMeta:     metav1.ObjectMeta{Name: "leaky", Namespace: ns},
+		InvolvedObject: corev1.ObjectReference{Kind: "Pod", Name: "many-1", Namespace: ns, UID: target.UID},
+		Type:           corev1.EventTypeWarning, Reason: "Leaky", Message: secretMsg,
+		FirstTimestamp: metav1.Now(), LastTimestamp: metav1.Now(), Count: 1,
+	}
+	if _, err := c.Typed.CoreV1().Events(ns).Create(ctx, ev, metav1.CreateOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{{"events"}, {"events", "pod/many-1"}, {"inspect", "pod", "many-1"}} {
+		for _, extra := range [][]string{nil, {"--full"}, {"--yaml"}, {"--full", "--json"}} {
+			full := append(append(append([]string{}, args...), "-n", ns), extra...)
+			code, out, errOut := realRoot(full...)
+			if code != 0 {
+				t.Fatalf("%v: exit %d: %s", full, code, errOut)
+			}
+			if !strings.Contains(out, "Leaky") {
+				t.Errorf("%v: the event is missing:\n%s", full, out)
+			}
+			for _, leak := range []string{"sentinelEventTok99", "abcdefghijklmnop12345"} {
+				if strings.Contains(out, leak) {
+					t.Errorf("%v leaked %q:\n%s", full, leak, out)
+				}
+			}
+		}
+	}
+}
+
+func TestReadCoreNamedClusterScopedReadsIgnoreNamespaceFlags(t *testing.T) {
+	_, ns := itSetup(t)
+	nodes := itJSON(t, "get", "nodes")
+	name := rowsOf(nodes, "items")[0]["name"].(string)
+	for _, extra := range [][]string{{"-A"}, {"-n", ns}} {
+		m := itJSON(t, append([]string{"get", "node", name}, extra...)...)
+		rows := rowsOf(m, "items")
+		if m["count"] != float64(1) || rows[0]["name"] != name || m["namespace"] != nil {
+			t.Errorf("get node %s %v: %v", name, extra, m)
+		}
+	}
+	full := rowsOf(itJSON(t, "get", "node", name, "-A", "--full"), "items")
+	if len(full) != 1 || full[0]["metadata"].(map[string]any)["name"] != name {
+		t.Errorf("get node -A --full: %v", full)
+	}
+	if m := itJSON(t, "inspect", "node", name, "-n", ns); m["kind"] != "Node" || m["namespace"] != nil {
+		t.Errorf("inspect node: %v", m)
+	}
+}

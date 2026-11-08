@@ -123,6 +123,10 @@ func TestEventsForClusterScopedObjectSearchAllNamespaces(t *testing.T) {
 	if got := strings.Join(reasons(m), ","); got != "NodeReady" {
 		t.Errorf("events = %s", got)
 	}
+	m = runJSON(t, c, "events", "node/n1", "-n", "default", "-A")
+	if got := strings.Join(reasons(m), ","); got != "NodeReady" || m["scope"] != "node/n1" {
+		t.Errorf("events with ignored namespace flags: scope=%v events=%s", m["scope"], got)
+	}
 }
 
 func TestEventsFilters(t *testing.T) {
@@ -211,6 +215,19 @@ func TestEventsMessageIsCutInCompactAndWholeInFull(t *testing.T) {
 		if _, ok := row[k]; !ok {
 			t.Errorf("--full row lacks %s: %v", k, row)
 		}
+	}
+}
+
+func TestEventsFullFirstSeenFallsBackToEventTime(t *testing.T) {
+	ev := event("default", "eventtime", "Warning", "EventTimeOnly", "Pod", "a", time.Hour)
+	ev.FirstTimestamp = metav1.Time{}
+	ev.LastTimestamp = metav1.Time{}
+	ev.EventTime = metav1.MicroTime{Time: fixedNow.Add(-3 * time.Minute)}
+	c := eventsFixture(t, ev)
+	m := runJSON(t, c, "events", "pod/a", "--full", "--type", "Warning", "--since", "5m")
+	row := m["events"].([]any)[0].(map[string]any)
+	if row["first_seen"] != "2026-11-07T11:57:00Z" || row["last_seen"] != "2026-11-07T11:57:00Z" {
+		t.Errorf("eventTime fallback row: %v", row)
 	}
 }
 
