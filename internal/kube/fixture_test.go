@@ -59,6 +59,7 @@ func listKinds() map[schema.GroupVersionResource]string {
 		{Group: "apps", Version: "v1", Resource: "replicasets"}:                               "ReplicaSetList",
 		{Group: "apps", Version: "v1", Resource: "deployments"}:                               "DeploymentList",
 		{Group: "batch", Version: "v1", Resource: "jobs"}:                                     "JobList",
+		{Group: "", Version: "v1", Resource: "resourcequotas"}:                                "ResourceQuotaList",
 		{Group: "events.k8s.io", Version: "v1", Resource: "events"}:                           "EventList",
 		{Group: "apiextensions.k8s.io", Version: "v1", Resource: "customresourcedefinitions"}: "CustomResourceDefinitionList",
 	}

@@ -25,6 +25,7 @@ k8s-axi get deploy -A -l app=web      # all namespaces, label selector (also --f
 k8s-axi inspect pod web-6d5f8         # key facts, conditions, owner chain, newest events
 k8s-axi events -n prod --type Warning # newest first; add pod/web-6d5f8 for one object
 k8s-axi logs deploy/web --since 15m   # bounded, redacted; -c, --previous, --tail, -l
+k8s-axi diagnose deploy/web -n prod   # ranked findings with evidence, for workloads and services
 k8s-axi plan scale deploy/web --replicas 0 -n prod   # preview, changes nothing
 k8s-axi scale deploy/web --replicas 5 -n prod        # also --dry-run=server
 k8s-axi rollout restart sts/db -n prod               # deployments, statefulsets, daemonsets
@@ -102,6 +103,24 @@ Secret values are never printed, and there is no flag that reveals them: `get` a
 Full objects also drop `managedFields` and the `last-applied-configuration` annotation, mask credential-looking env literals and ConfigMap `data` or `binaryData` keys, and mask secret-shaped strings.
 Log text is redacted for bearer tokens, JWTs, `token=`/`password=` pairs, URL passwords and private keys, and the result says how many values were replaced.
 Redaction is pattern based, so treat logs as best effort.
+
+### Diagnose
+
+`diagnose KIND NAME` (or `KIND/NAME`) answers "why is this unhealthy" in one call for pods, deployments, statefulsets, daemonsets, jobs and services.
+It reads the object, its owner chain, its pods, the newest warning events and a few bounded log tails.
+It then applies fixed rules and prints a `status` (`unhealthy`, `degraded` or `healthy`), a one-sentence `conclusion`, ranked `findings` and next-step commands.
+
+Every finding is labelled `observed` (read directly from the cluster) or `inferred` (derived by a rule) and lists the evidence it used.
+An observed fact and its inferred cause are separate findings, for example `image-pull` and `image-pull-cause`.
+Findings cover image pull failures, crash loops with the last termination reason, out-of-memory kills, container and init failures, unschedulable pods and why, failed probes, evictions, unhealthy nodes, failed pod creation and exhausted quotas, stalled or blocked rollouts, unavailable replicas, failed jobs, and services with no pods, a selector mismatch, no ready endpoints or a wrong target port.
+The rules are plain functions with no model calls and no network access beyond the Kubernetes API.
+
+Reads are bounded: one page of at most 100 pods, 1000 events, 3 log streams of 20 lines and 4 KiB each, 3 nodes, and concurrency capped at 4.
+`--full` raises the log tails and stream count, shows every pod row and complete messages, and adds the scrubbed target object.
+A check that cannot run, such as a list denied by RBAC or a read that timed out, is listed under `gaps` and never fails the command.
+The whole command stops after three times `--timeout` and reports what it has.
+It exits 0 whenever it produced a report, healthy or not.
+It only reads, and the same redaction and Secret rules apply as for the other commands.
 
 Global flags: `--context`, `--kubeconfig`, `-n/--namespace`, `--json`, `--yaml`, `--full`, `--limit`, `--timeout`.
 Each has a `K8S_AXI_<NAME>` environment variable, and `KUBECONFIG` keeps its standard meaning.

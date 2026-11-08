@@ -5,6 +5,7 @@ package kube
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"slices"
@@ -58,6 +59,37 @@ func eventually(t *testing.T, what string, within time.Duration, ok func() bool)
 		}
 		time.Sleep(time.Second)
 	}
+}
+
+func waitForPodLogLine(t *testing.T, c *Clients, ns, pod, container string, previous bool, within time.Duration, want string) {
+	t.Helper()
+	eventually(t, "pod log line "+want, within, func() bool {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		rc, err := c.Typed.CoreV1().Pods(ns).GetLogs(pod, &corev1.PodLogOptions{
+			Container: container,
+			Previous:  previous,
+			TailLines: ptr.To(int64(20)),
+		}).Stream(ctx)
+		if err != nil {
+			return false
+		}
+		defer func() { _ = rc.Close() }()
+		raw, err := io.ReadAll(rc)
+		return err == nil && strings.Contains(string(raw), want)
+	})
+}
+
+func waitForRestartedPod(t *testing.T, ns, pod string, within time.Duration) {
+	t.Helper()
+	eventually(t, "pod "+pod+" to show a crash-loop backoff", within, func() bool {
+		m := itTry("get", "pods", pod, "-n", ns)
+		if m == nil {
+			return false
+		}
+		rows := rowsOf(m, "items")
+		return len(rows) == 1 && rows[0]["restarts"].(float64) >= 1 && rows[0]["status"] == "CrashLoopBackOff"
+	})
 }
 
 // itJSON runs a command that must succeed and returns its JSON output.
@@ -326,24 +358,15 @@ func TestReadCoreLogsPreviousOfARestartedContainer(t *testing.T) {
 	if _, err := c.Typed.CoreV1().Pods(ns).Create(context.Background(), pod, metav1.CreateOptions{}); err != nil {
 		t.Fatal(err)
 	}
-	eventually(t, "the container to restart", 180*time.Second, func() bool {
-		rows := rowsOf(itTry("get", "pods", "-n", ns), "items")
-		return len(rows) == 1 && rows[0]["restarts"].(float64) >= 1
-	})
+	waitForRestartedPod(t, ns, "crasher", 180*time.Second)
+	waitForPodLogLine(t, c, ns, "crasher", "app", true, 60*time.Second, "first-run-line")
 	var lines []string
-	eventually(t, "previous logs", 60*time.Second, func() bool {
-		m := itTry("logs", "crasher", "--previous", "-n", ns)
-		if m == nil {
-			return false
-		}
-		lines = nil
-		for _, l := range rowsOf(rowsOf(m, "streams")[0], "log") {
-			lines = append(lines, l["line"].(string))
-		}
-		return len(lines) > 0
-	})
-	if lines[0] != "first-run-line" {
-		t.Errorf("previous log = %v", lines)
+	m := itJSON(t, "logs", "crasher", "--previous", "-n", ns)
+	for _, l := range rowsOf(rowsOf(m, "streams")[0], "log") {
+		lines = append(lines, l["line"].(string))
+	}
+	if len(lines) == 0 || lines[0] != "first-run-line" {
+		t.Errorf("previous logs = %v", lines)
 	}
 }
 
