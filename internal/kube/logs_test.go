@@ -180,32 +180,42 @@ func TestLogsCapsThePodsRead(t *testing.T) {
 func TestLogsLimitsSelectorPodList(t *testing.T) {
 	freezeTime(t)
 	c, cs := readFixture(t, nil)
-	var seen metav1.ListOptions
+	var seen []metav1.ListOptions
 	cs.PrependReactor("list", "pods", func(a clienttesting.Action) (bool, runtime.Object, error) {
-		seen = a.(clienttesting.ListActionImpl).ListOptions
-		rem := int64(41)
-		return true, &corev1.PodList{
-			ListMeta: metav1.ListMeta{Continue: "more", RemainingItemCount: &rem},
-			Items: []corev1.Pod{
-				*runningPod("default", "p6", map[string]string{"app": "many"}),
-				*runningPod("default", "p5", map[string]string{"app": "many"}),
-				*runningPod("default", "p4", map[string]string{"app": "many"}),
-				*runningPod("default", "p3", map[string]string{"app": "many"}),
-				*runningPod("default", "p2", map[string]string{"app": "many"}),
+		o := a.(clienttesting.ListActionImpl).ListOptions
+		seen = append(seen, o)
+		switch o.Continue {
+		case "":
+			return true, &corev1.PodList{
+				ListMeta: metav1.ListMeta{Continue: "next"},
+				Items: []corev1.Pod{
+					*runningPod("default", "p6", map[string]string{"app": "many"}),
+					*runningPod("default", "p5", map[string]string{"app": "many"}),
+					*runningPod("default", "p4", map[string]string{"app": "many"}),
+					*runningPod("default", "p3", map[string]string{"app": "many"}),
+					*runningPod("default", "p2", map[string]string{"app": "many"}),
+				},
+			}, nil
+		case "next":
+			return true, &corev1.PodList{Items: []corev1.Pod{
 				*runningPod("default", "p1", map[string]string{"app": "many"}),
-			},
-		}, nil
+				*runningPod("default", "p0", map[string]string{"app": "many"}),
+			}}, nil
+		default:
+			t.Fatalf("unexpected continue token %q", o.Continue)
+			return true, nil, nil
+		}
 	})
 	stubLogs(t, func(pod, _ string) (string, error) { return pod + "\n", nil })
 	m := runJSON(t, c, "logs", "-l", "app=many")
 	streams := m["streams"].([]any)
-	if seen.Limit != logPodListLimit || seen.LabelSelector != "app=many" {
+	if len(seen) != 2 || seen[0].Limit != logPodListLimit || seen[0].LabelSelector != "app=many" || seen[0].Continue != "" || seen[1].Continue != "next" {
 		t.Fatalf("list options: %+v", seen)
 	}
-	if m["pods"] != float64(47) || len(streams) != 5 || streams[0].(map[string]any)["pod"] != "p1" || streams[4].(map[string]any)["pod"] != "p5" {
+	if m["pods"] != float64(7) || len(streams) != 5 || streams[0].(map[string]any)["pod"] != "p0" || streams[4].(map[string]any)["pod"] != "p4" {
 		t.Fatalf("envelope: %v", m)
 	}
-	if !strings.Contains(m["note"].(string), "showing 5 of 47 pods") {
+	if !strings.Contains(m["note"].(string), "showing 5 of 7 pods") {
 		t.Errorf("note = %q", m["note"])
 	}
 }

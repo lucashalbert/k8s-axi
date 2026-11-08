@@ -152,6 +152,7 @@ var typedResources = map[schema.GroupVersionResource]typedAPI{
 type listResult struct {
 	Items     []unstructured.Unstructured
 	More      bool
+	Continue  string
 	Remaining *int64 // how many more, when the server says
 }
 
@@ -172,7 +173,7 @@ func (c *Clients) List(ctx context.Context, r Resource, ns string, o metav1.List
 	if err != nil {
 		return listResult{}, err
 	}
-	return listResult{Items: l.Items, More: l.GetContinue() != "", Remaining: l.GetRemainingItemCount()}, nil
+	return listResult{Items: l.Items, More: l.GetContinue() != "", Continue: l.GetContinue(), Remaining: l.GetRemainingItemCount()}, nil
 }
 
 // Get reads one object of resource r. ns is ignored for cluster-scoped
@@ -209,7 +210,7 @@ func fromTyped(r Resource, list runtime.Object) (listResult, error) {
 	if err != nil {
 		return listResult{}, fmt.Errorf("read %s list: %w", r, err)
 	}
-	res := listResult{Items: make([]unstructured.Unstructured, 0, len(objs)), More: acc.GetContinue() != "", Remaining: acc.GetRemainingItemCount()}
+	res := listResult{Items: make([]unstructured.Unstructured, 0, len(objs)), More: acc.GetContinue() != "", Continue: acc.GetContinue(), Remaining: acc.GetRemainingItemCount()}
 	for _, o := range objs {
 		u, err := toUnstructured(r, o)
 		if err != nil {
