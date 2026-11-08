@@ -29,10 +29,11 @@ type applyCall struct {
 // ownership conflicts and namespaces, and learns new kinds from applied CRDs.
 type applyEnv struct {
 	*mutEnv
-	calls      []applyCall
-	owners     map[string]map[string]string // "resource/name" -> field -> manager that owns it
-	invalid    map[string]string            // "resource/name" -> message of a 422
-	namespaces map[string]bool              // existing namespaces; nil means every namespace exists
+	calls                       []applyCall
+	owners                      map[string]map[string]string // "resource/name" -> field -> manager that owns it
+	invalid                     map[string]string            // "resource/name" -> message of a 422
+	namespaces                  map[string]bool              // existing namespaces; nil means every namespace exists
+	clearOwnersAfterDryConflict bool
 }
 
 var (
@@ -100,7 +101,11 @@ func (e *applyEnv) apply(a clienttesting.Action) (bool, runtime.Object, error) {
 			Message: msg, Details: &metav1.StatusDetails{Name: name, Group: gk.Group, Kind: gk.Kind}}}
 	}
 	if owners := e.owners[key]; owners != nil && !call.force {
-		return true, nil, fieldConflict(gvr, name, owners)
+		err := fieldConflict(gvr, name, owners)
+		if call.dry && e.clearOwnersAfterDryConflict {
+			delete(e.owners, key)
+		}
+		return true, nil, err
 	}
 
 	live, err := e.dyn.Tracker().Get(gvr, ns, name)
@@ -139,11 +144,21 @@ func (e *applyEnv) learn(gvr schema.GroupVersionResource, o *unstructured.Unstru
 		kind, _, _ := unstructured.NestedString(o.Object, "spec", "names", "kind")
 		plural, _, _ := unstructured.NestedString(o.Object, "spec", "names", "plural")
 		scope, _, _ := unstructured.NestedString(o.Object, "spec", "scope")
-		vers, _, _ := unstructured.NestedSlice(o.Object, "spec", "versions")
-		v := vers[0].(map[string]any)["name"].(string)
 		fd := e.c.Discovery.(*fakediscovery.FakeDiscovery)
-		fd.Resources = append(fd.Resources, &metav1.APIResourceList{GroupVersion: group + "/" + v, APIResources: []metav1.APIResource{
-			{Name: plural, SingularName: strings.ToLower(kind), Kind: kind, Namespaced: scope == "Namespaced", Verbs: metav1.Verbs{"get", "list"}}}})
+		vers, _, _ := unstructured.NestedSlice(o.Object, "spec", "versions")
+		for _, v := range vers {
+			vm, ok := v.(map[string]any)
+			if !ok {
+				continue
+			}
+			name, _ := vm["name"].(string)
+			served, _ := vm["served"].(bool)
+			if name == "" || !served {
+				continue
+			}
+			fd.Resources = append(fd.Resources, &metav1.APIResourceList{GroupVersion: group + "/" + name, APIResources: []metav1.APIResource{
+				{Name: plural, SingularName: strings.ToLower(kind), Kind: kind, Namespaced: scope == "Namespaced", Verbs: metav1.Verbs{"get", "list"}}}})
+		}
 	}
 }
 

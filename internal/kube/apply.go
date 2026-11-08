@@ -181,7 +181,7 @@ func (g *globals) resolveItems(ctx context.Context, cmd *cobra.Command, c *Clien
 		case err == nil:
 		case errors.As(err, &unserved):
 			crd, ok := crds[gvk.GroupKind()]
-			if !ok {
+			if !ok || !crd.serves(gvk.Version) {
 				return nil, axierr.Usage(cmd.CommandPath(), fmt.Sprintf("%s: the cluster does not serve %s %s", m.source, gvk.GroupVersion(), gvk.Kind),
 					"check apiVersion and kind, or list the served kinds with 'k8s-axi discover'; a CRD may be in the same manifest")
 			}
@@ -485,6 +485,9 @@ func (j *applyJob) execute(ctx context.Context) applyResult {
 		switch {
 		case it.state == stateUnchanged:
 			o.Status = "unchanged"
+		case it.state == stateFailed:
+			o.Status, o.Detail = "failed", it.detail(j.g.full)
+			failed[it.id()] = true
 		case it.after != "" && failed[it.after]:
 			o.Status, o.Detail = "failed", "skipped: "+it.after+" was not applied"
 			failed[it.id()] = true
@@ -566,7 +569,10 @@ func (j *applyJob) next(res applyResult, dry bool) []string {
 }
 
 // manifestCRD is a CustomResourceDefinition the manifest itself creates.
-type manifestCRD struct{ name, plural, scope string }
+type manifestCRD struct {
+	name, plural, scope string
+	served              map[string]bool
+}
 
 func manifestCRDs(objs []manifestObject) map[schema.GroupKind]manifestCRD {
 	out := map[schema.GroupKind]manifestCRD{}
@@ -578,9 +584,26 @@ func manifestCRDs(objs []manifestObject) map[schema.GroupKind]manifestCRD {
 		kind, _, _ := unstructured.NestedString(m.obj.Object, "spec", "names", "kind")
 		plural, _, _ := unstructured.NestedString(m.obj.Object, "spec", "names", "plural")
 		scope, _, _ := unstructured.NestedString(m.obj.Object, "spec", "scope")
-		out[schema.GroupKind{Group: group, Kind: kind}] = manifestCRD{name: m.obj.GetName(), plural: plural, scope: scope}
+		versions, _, _ := unstructured.NestedSlice(m.obj.Object, "spec", "versions")
+		served := map[string]bool{}
+		for _, v := range versions {
+			vm, ok := v.(map[string]any)
+			if !ok {
+				continue
+			}
+			name, _ := vm["name"].(string)
+			isServed, _ := vm["served"].(bool)
+			if name != "" && isServed {
+				served[name] = true
+			}
+		}
+		out[schema.GroupKind{Group: group, Kind: kind}] = manifestCRD{name: m.obj.GetName(), plural: plural, scope: scope, served: served}
 	}
 	return out
+}
+
+func (d manifestCRD) serves(version string) bool {
+	return d.served[version]
 }
 
 func (d manifestCRD) resource(gvk schema.GroupVersionKind) Resource {

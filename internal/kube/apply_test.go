@@ -157,6 +157,25 @@ func TestApplyConflictThenForce(t *testing.T) {
 	}
 }
 
+func TestApplyDoesNotExecuteFailedAssessment(t *testing.T) {
+	e := newApplyEnv(t, workload("apps/v1", "Deployment", "default", "web", 3, nil))
+	e.owners["deployments/web"] = map[string]string{".spec.replicas": "helm"}
+	e.clearOwnersAfterDryConflict = true
+	code, out, errOut := applyRun(t, e, manifest(t, webYAML(5)), "-n", "default", "--json")
+	if code != 1 {
+		t.Fatalf("exit %d, want 1\n%s%s", code, out, errOut)
+	}
+	if st := objStatuses(t, jsonDocs(t, out)[1]["result"].(map[string]any)); st["deployment/web"] != "failed" {
+		t.Errorf("statuses = %v", st)
+	}
+	if got := e.replicas(deployGVR, "default", "web"); got != 3 {
+		t.Errorf("failed assessment changed replicas to %d", got)
+	}
+	if real := e.real(); len(real) != 0 {
+		t.Errorf("failed assessment was applied: %+v", real)
+	}
+}
+
 func TestApplyDryRunServerChangesNothing(t *testing.T) {
 	e := newApplyEnv(t, workload("apps/v1", "Deployment", "default", "web", 3, nil))
 	file := manifest(t, webYAML(5)+"---\n"+cfgYAML)
@@ -280,6 +299,7 @@ spec:
 `
 
 const sprocket = "apiVersion: acme.io/v1\nkind: Sprocket\nmetadata: {name: s1}\nspec: {teeth: 9}\n"
+const sprocketV2 = "apiVersion: acme.io/v2\nkind: Sprocket\nmetadata: {name: s1}\nspec: {teeth: 9}\n"
 
 func TestApplyCRDAndItsResourceInOneManifest(t *testing.T) {
 	e := newApplyEnv(t)
@@ -313,6 +333,17 @@ func TestApplyCRDAndItsResourceInOneManifest(t *testing.T) {
 	}
 	if !e.has(schemaGVR("acme.io", "v1", "sprockets"), "default", "s1") || !e.has(configGVR, "team", "cfg") {
 		t.Error("dependent objects were not stored")
+	}
+}
+
+func TestApplyCRDAndResourceMustAgreeOnServedVersion(t *testing.T) {
+	e := newApplyEnv(t)
+	code, out, errOut := applyRun(t, e, manifest(t, widgetCRD+"---\n"+sprocketV2), "-n", "default", "--timeout", "20ms", "--json")
+	if code != 2 || out != "" || !strings.Contains(errOut, "does not serve acme.io/v2 Sprocket") {
+		t.Fatalf("exit %d, stdout %q, stderr %s", code, out, errOut)
+	}
+	if len(e.calls) != 0 {
+		t.Fatalf("unsupported custom resource touched the cluster: %+v", e.calls)
 	}
 }
 
