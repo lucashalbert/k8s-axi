@@ -37,7 +37,7 @@ func itSetup(t *testing.T) (*Clients, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ns := strings.ToLower(fmt.Sprintf("k8s-axi-it-%s-%d", strings.NewReplacer("/", "-", "_", "-").Replace(t.Name()), time.Now().UnixNano()%100000))
+	ns := strings.ToLower(fmt.Sprintf("k8s-axi-it-%s-%d", strings.NewReplacer("/", "-", "_", "-").Replace(t.Name()), time.Now().UnixMilli()%1000000))
 	if len(ns) > 63 {
 		ns = ns[:63]
 	}
