@@ -52,7 +52,7 @@ func (m *resettableMapper) Reset() {
 	if err != nil {
 		panic(err)
 	}
-	m.RESTMapper = restmapper.NewDiscoveryRESTMapper(groups)
+	m.RESTMapper = restmapper.NewShortcutExpander(restmapper.NewDiscoveryRESTMapper(groups), m.c.Discovery, func(string) {})
 }
 
 func newApplyEnv(t *testing.T, objs ...runtime.Object) *applyEnv {
