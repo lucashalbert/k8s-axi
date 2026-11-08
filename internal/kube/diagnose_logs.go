@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strings"
 	"sync"
 )
 
@@ -95,6 +96,14 @@ func (g *globals) readLogs(ctx context.Context, c *Clients, s *snapshot, gp *gap
 				gp.add(what, "get", "pods/log", err)
 				return
 			}
+			if kubeletLogUnavailable(st) {
+				what := "logs " + sel.pod + "/" + sel.container
+				if sel.previous {
+					what += " (previous)"
+				}
+				gp.raw(what + ": the kubelet could not return the log yet")
+				return
+			}
 			mu.Lock()
 			redacted += n
 			mu.Unlock()
@@ -109,6 +118,10 @@ func (g *globals) readLogs(ctx context.Context, c *Clients, s *snapshot, gp *gap
 		}
 	}
 	return out, redacted
+}
+
+func kubeletLogUnavailable(st logStream) bool {
+	return st.Lines == 1 && len(st.Log) == 1 && strings.HasPrefix(st.Log[0].Line, "unable to retrieve container logs")
 }
 
 // diagnoseNext suggests at most four follow-up commands.

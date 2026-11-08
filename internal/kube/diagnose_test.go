@@ -264,6 +264,22 @@ func TestDiagnosePodReadsPreviousLogsRedactedAndBounded(t *testing.T) {
 	}
 }
 
+func TestDiagnoseTreatsKubeletUnavailableLogBodyAsGap(t *testing.T) {
+	freezeTime(t)
+	stubDiagLogs(t, func(context.Context, string, string, bool) (string, error) {
+		return "unable to retrieve container logs for containerd://abc123\n", nil
+	})
+	c, _ := readFixture(t, []runtime.Object{crashLoopPod(t, "crash-1", "app"), readyNode(t)})
+	m := runJSON(t, c, "diagnose", "pod", "crash-1")
+	if logs := m["logs"].([]any); len(logs) != 0 {
+		t.Fatalf("logs = %v, want none", logs)
+	}
+	gaps := m["gaps"].([]any)
+	if len(gaps) != 1 || gaps[0] != "logs crash-1/app (previous): the kubelet could not return the log yet" {
+		t.Fatalf("gaps = %v", gaps)
+	}
+}
+
 func TestDiagnoseLogSelectionUsesPreviousForRestartedFailure(t *testing.T) {
 	cases := []struct {
 		name         string
