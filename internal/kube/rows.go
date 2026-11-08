@@ -155,7 +155,7 @@ func rowFor(r Resource, u *unstructured.Unstructured, showNS bool) any {
 	case r.GVR.Group == "batch" && r.GVR.Resource == "jobs":
 		return jobRow{ns, name, fmt.Sprintf("%d/%d", num(o, "status", "succeeded"), completions(o)), a}
 	case r.GVR.Group == "" && r.GVR.Resource == "nodes":
-		return nodeRow{name, nodeStatus(o), nodeRoles(u), str(o, "status", "nodeInfo", "kubeletVersion"), a}
+		return nodeRow{name, nodeStatus(o), nodeRoles(u.GetLabels()), str(o, "status", "nodeInfo", "kubeletVersion"), a}
 	case r.GVR.Group == "" && r.GVR.Resource == "services":
 		return serviceRow{ns, name, str(o, "spec", "type"), str(o, "spec", "clusterIP"), servicePorts(o), a}
 	case r.GVR.Group == "" && r.GVR.Resource == "configmaps":
@@ -281,9 +281,9 @@ func nodeStatus(o map[string]any) string {
 	return s
 }
 
-func nodeRoles(u *unstructured.Unstructured) string {
+func nodeRoles(labels map[string]string) string {
 	var roles []string
-	for k := range u.GetLabels() {
+	for k := range labels {
 		if r, ok := strings.CutPrefix(k, "node-role.kubernetes.io/"); ok && r != "" {
 			roles = append(roles, r)
 		}
