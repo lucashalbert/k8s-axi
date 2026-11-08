@@ -62,8 +62,7 @@ Applied to every object that leaves a command in full form (`--full`), and to in
 1. Secrets: `data` and `stringData` values become `<N bytes>`.
    Compact `get` and `inspect` of a Secret show the type and key names with sizes only.
 2. `metadata.managedFields` and the `kubectl.kubernetes.io/last-applied-configuration` annotation are dropped on every kind, because the annotation repeats Secret values and env literals verbatim.
-3. Any `{name, value}` pair whose name looks like a credential (`password`, `passwd`, `secret`, `token`, `api_key`, `credential`, `private_key`) has its value replaced by `[REDACTED]`.
-   This covers literal container `env` entries.
+3. Literal container `env` entries and ConfigMap `data` or `binaryData` keys whose names look like credentials (`password`, `passwd`, `secret`, `token`, `api_key`, `credential`, `private_key`) have their values replaced by `[REDACTED]`.
 4. Every remaining string passes through the SDK `redact.Mask`, which removes bearer tokens, JWTs, `token=`/`password=` pairs, URL passwords and private keys.
 
 The kubeconfig is only ever read.
@@ -163,6 +162,7 @@ k8s-axi events [KIND NAME | KIND/NAME] [-n NS | -A] [--type Normal|Warning] [--s
 
 - With no object, the scope is the namespace (`-A` for all).
 - With an object, only events about it (by UID when the object exists, else by kind and name).
+  Cluster-scoped object scopes search all namespaces and ignore `-n` and `-A`.
 - Sorted newest first by the latest of `lastTimestamp`, `eventTime`, `series.lastObservedTime` and `creationTimestamp`.
 - The API server cannot sort events, so up to 1000 matching events are read and sorted here.
   If more exist, `truncated` is true and the note says the newest may be missing, with the narrowing flags.

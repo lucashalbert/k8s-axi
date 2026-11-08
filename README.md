@@ -45,7 +45,7 @@ Lists are cut at `--limit` rows (default 50, `0` for no limit), events are read 
 `--full` prints complete objects.
 
 Secret values are never printed, and there is no flag that reveals them: `get` and `inspect` show a Secret's type and key names with sizes only, also with `--full`, `--json` and `--yaml`.
-Full objects also drop `managedFields` and the `last-applied-configuration` annotation, mask credential-looking env literals and ConfigMap keys, and mask secret-shaped strings.
+Full objects also drop `managedFields` and the `last-applied-configuration` annotation, mask credential-looking env literals and ConfigMap `data` or `binaryData` keys, and mask secret-shaped strings.
 Log text is redacted for bearer tokens, JWTs, `token=`/`password=` pairs, URL passwords and private keys, and the result says how many values were replaced.
 Redaction is pattern based, so treat logs as best effort.
 
