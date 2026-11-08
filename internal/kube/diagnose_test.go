@@ -264,6 +264,44 @@ func TestDiagnosePodReadsPreviousLogsRedactedAndBounded(t *testing.T) {
 	}
 }
 
+func TestDiagnoseLogSelectionUsesPreviousForRestartedFailure(t *testing.T) {
+	cases := []struct {
+		name         string
+		status       map[string]any
+		wantPrevious bool
+	}{
+		{
+			name: "restarted current termination",
+			status: map[string]any{
+				"name":         "app",
+				"restartCount": int64(2),
+				"state":        map[string]any{"terminated": map[string]any{"exitCode": int64(3)}},
+				"lastState":    map[string]any{"terminated": map[string]any{"exitCode": int64(3)}},
+			},
+			wantPrevious: true,
+		},
+		{
+			name: "terminal one shot failure",
+			status: map[string]any{
+				"name":         "app",
+				"restartCount": int64(0),
+				"state":        map[string]any{"terminated": map[string]any{"exitCode": int64(3)}},
+			},
+		},
+	}
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			sel, ok := logSelFor("crasher", tt.status)
+			if !ok {
+				t.Fatal("no log selected")
+			}
+			if sel.previous != tt.wantPrevious {
+				t.Fatalf("previous = %v, want %v", sel.previous, tt.wantPrevious)
+			}
+		})
+	}
+}
+
 func TestDiagnoseCapsLogStreams(t *testing.T) {
 	freezeTime(t)
 	var objs []runtime.Object
