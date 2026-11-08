@@ -14,6 +14,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	clienttesting "k8s.io/client-go/testing"
 )
 
 // stubLogs replaces the log stream with fn for one test and records the
@@ -173,6 +174,59 @@ func TestLogsCapsThePodsRead(t *testing.T) {
 	m := runJSON(t, c, "logs", "-l", "app=many")
 	if m["pods"] != float64(7) || len(m["streams"].([]any)) != 5 || !strings.Contains(m["note"].(string), "showing 5 of 7 pods") {
 		t.Errorf("envelope: %v", m)
+	}
+}
+
+func TestLogsLimitsSelectorPodList(t *testing.T) {
+	freezeTime(t)
+	c, cs := readFixture(t, nil)
+	var seen metav1.ListOptions
+	cs.PrependReactor("list", "pods", func(a clienttesting.Action) (bool, runtime.Object, error) {
+		seen = a.(clienttesting.ListActionImpl).ListOptions
+		rem := int64(41)
+		return true, &corev1.PodList{
+			ListMeta: metav1.ListMeta{Continue: "more", RemainingItemCount: &rem},
+			Items: []corev1.Pod{
+				*runningPod("default", "p6", map[string]string{"app": "many"}),
+				*runningPod("default", "p5", map[string]string{"app": "many"}),
+				*runningPod("default", "p4", map[string]string{"app": "many"}),
+				*runningPod("default", "p3", map[string]string{"app": "many"}),
+				*runningPod("default", "p2", map[string]string{"app": "many"}),
+				*runningPod("default", "p1", map[string]string{"app": "many"}),
+			},
+		}, nil
+	})
+	stubLogs(t, func(pod, _ string) (string, error) { return pod + "\n", nil })
+	m := runJSON(t, c, "logs", "-l", "app=many")
+	streams := m["streams"].([]any)
+	if seen.Limit != logPodListLimit || seen.LabelSelector != "app=many" {
+		t.Fatalf("list options: %+v", seen)
+	}
+	if m["pods"] != float64(47) || len(streams) != 5 || streams[0].(map[string]any)["pod"] != "p1" || streams[4].(map[string]any)["pod"] != "p5" {
+		t.Fatalf("envelope: %v", m)
+	}
+	if !strings.Contains(m["note"].(string), "showing 5 of 47 pods") {
+		t.Errorf("note = %q", m["note"])
+	}
+}
+
+func TestLogsLimitsWorkloadPodList(t *testing.T) {
+	freezeTime(t)
+	dep := &appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "web"},
+		Spec: appsv1.DeploymentSpec{Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": "web"}}}}
+	c, cs := readFixture(t, []runtime.Object{dep})
+	var seen metav1.ListOptions
+	cs.PrependReactor("list", "pods", func(a clienttesting.Action) (bool, runtime.Object, error) {
+		seen = a.(clienttesting.ListActionImpl).ListOptions
+		return true, &corev1.PodList{Items: []corev1.Pod{*runningPod("default", "web-1", map[string]string{"app": "web"})}}, nil
+	})
+	stubLogs(t, func(string, string) (string, error) { return "ok\n", nil })
+	m := runJSON(t, c, "logs", "deploy/web")
+	if seen.Limit != logPodListLimit || seen.LabelSelector != "app=web" {
+		t.Fatalf("list options: %+v", seen)
+	}
+	if m["pods"] != float64(1) || len(m["streams"].([]any)) != 1 {
+		t.Fatalf("envelope: %v", m)
 	}
 }
 

@@ -21,11 +21,12 @@ import (
 )
 
 const (
-	defaultTail    = 100
-	maxTailLines   = 10000
-	defaultMaxSize = 64 * 1024 // total log bytes in one response
-	minStreamBytes = 1024
-	maxLogPods     = 5
+	defaultTail     = 100
+	maxTailLines    = 10000
+	defaultMaxSize  = 64 * 1024 // total log bytes in one response
+	minStreamBytes  = 1024
+	maxLogPods      = 5
+	logPodListLimit = maxLogPods + 1
 	// maxReadBytes caps what is read from one container, so a container with
 	// very long lines cannot make the command read without bound.
 	maxReadBytes = 4 << 20
@@ -131,8 +132,10 @@ func (o logOpts) validate(args int) error {
 
 // logTarget is the set of pods a logs command reads.
 type logTarget struct {
-	label string
-	pods  []unstructured.Unstructured
+	label       string
+	pods        []unstructured.Unstructured
+	matched     int
+	matchedMore bool
 }
 
 func (g *globals) logs(ctx context.Context, c *Clients, args []string, o logOpts) (logsOut, error) {
@@ -141,7 +144,7 @@ func (g *globals) logs(ctx context.Context, c *Clients, args []string, o logOpts
 	if err != nil {
 		return logsOut{}, err
 	}
-	out := logsOut{Target: tgt.label, Namespace: ns, Pods: len(tgt.pods), Streams: []logStream{}}
+	out := logsOut{Target: tgt.label, Namespace: ns, Pods: tgt.matched, Streams: []logStream{}}
 	if len(tgt.pods) == 0 {
 		out.Note = "no pods found for " + tgt.label + " in namespace " + ns
 		return out, nil
@@ -156,7 +159,7 @@ func (g *globals) logs(ctx context.Context, c *Clients, args []string, o logOpts
 	for i := range pods {
 		names, err := containerNames(&pods[i], o.container)
 		if err != nil {
-			if len(tgt.pods) == 1 {
+			if tgt.matched == 1 && !tgt.matchedMore {
 				return out, err
 			}
 			continue // a selector may match pods without that container
@@ -194,7 +197,7 @@ func (g *globals) logs(ctx context.Context, c *Clients, args []string, o logOpts
 		}
 		return out, axierr.Runtime("logs", "context/"+c.Context+" "+tgt.label, fmt.Errorf("%s", failed[0]), hint)
 	}
-	out.Note = logsNote(out, len(tgt.pods), len(pods), skippedStreams, o)
+	out.Note = logsNote(out, tgt.matched, tgt.matchedMore, len(pods), skippedStreams, o)
 	out.Next = g.logsNext(out)
 	return out, nil
 }
@@ -202,11 +205,11 @@ func (g *globals) logs(ctx context.Context, c *Clients, args []string, o logOpts
 // logPods resolves the pods a logs command reads.
 func (c *Clients) logPods(ctx context.Context, ns string, args []string, selector string) (logTarget, error) {
 	if selector != "" {
-		res, err := c.List(ctx, podsResource, ns, metav1.ListOptions{LabelSelector: selector})
+		pods, matched, matchedMore, err := c.listLogPods(ctx, ns, selector)
 		if err != nil {
 			return logTarget{}, apiError("logs", "context/"+c.Context+" pods"+nsFlag(ns), err, "list", "pods")
 		}
-		return logTarget{label: "selector " + selector, pods: sortedByName(res.Items)}, nil
+		return logTarget{label: "selector " + selector, pods: pods, matched: matched, matchedMore: matchedMore}, nil
 	}
 	kind, name := "pod", args[0]
 	if len(args) == 2 {
@@ -231,7 +234,7 @@ func (c *Clients) logPods(ctx context.Context, ns string, args []string, selecto
 		return logTarget{}, apiError("logs", "context/"+c.Context+" "+r.String()+"/"+name+nsFlag(ns), err, "get", r.String())
 	}
 	if r.GVR.Resource == "pods" {
-		return logTarget{label: label, pods: []unstructured.Unstructured{*obj}}, nil
+		return logTarget{label: label, pods: []unstructured.Unstructured{*obj}, matched: 1}, nil
 	}
 	sel := labelSelector(obj.Object, "spec", "selector")
 	if sel == "" && r.GVR.Resource == "jobs" {
@@ -240,11 +243,36 @@ func (c *Clients) logPods(ctx context.Context, ns string, args []string, selecto
 	if sel == "" {
 		return logTarget{}, axierr.Usage("logs", label+" has no pod selector", "select its pods with -l instead")
 	}
-	res, err := c.List(ctx, podsResource, ns, metav1.ListOptions{LabelSelector: sel})
+	pods, matched, matchedMore, err := c.listLogPods(ctx, ns, sel)
 	if err != nil {
 		return logTarget{}, apiError("logs", "context/"+c.Context+" pods"+nsFlag(ns), err, "list", "pods")
 	}
-	return logTarget{label: label, pods: sortedByName(res.Items)}, nil
+	return logTarget{label: label, pods: pods, matched: matched, matchedMore: matchedMore}, nil
+}
+
+func (c *Clients) listLogPods(ctx context.Context, ns, selector string) ([]unstructured.Unstructured, int, bool, error) {
+	res, err := c.List(ctx, podsResource, ns, metav1.ListOptions{LabelSelector: selector, Limit: logPodListLimit})
+	if err != nil {
+		return nil, 0, false, err
+	}
+	matched := len(res.Items)
+	matchedMore := false
+	if res.More {
+		if res.Remaining != nil {
+			matched += int(*res.Remaining)
+		} else {
+			matched = maxLogPods
+			matchedMore = true
+		}
+	}
+	if len(res.Items) > logPodListLimit {
+		matched = len(res.Items)
+	}
+	pods := sortedByName(res.Items)
+	if len(pods) > maxLogPods {
+		pods = pods[:maxLogPods]
+	}
+	return pods, matched, matchedMore, nil
 }
 
 // logsSupported reports whether logs can read resource r.
@@ -371,9 +399,11 @@ func truncateBytes(s string, n int) string {
 	return s[:limit] + ellipsis
 }
 
-func logsNote(out logsOut, matched, shown, skippedStreams int, o logOpts) string {
+func logsNote(out logsOut, matched int, matchedMore bool, shown, skippedStreams int, o logOpts) string {
 	var notes []string
-	if matched > shown {
+	if matchedMore {
+		notes = append(notes, fmt.Sprintf("showing %d of more than %d pods (first by name); name a pod or narrow with -l to see others", shown, matched))
+	} else if matched > shown {
 		notes = append(notes, fmt.Sprintf("showing %d of %d pods (first by name); name a pod or narrow with -l to see others", shown, matched))
 	}
 	if skippedStreams > 0 {
