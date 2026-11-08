@@ -76,7 +76,7 @@ The captain gave explicit consent on 2026-11-07 for exactly: `lucashalbert/axi-s
 - Update check: GitHub Releases API, 2 second timeout, cached under the user cache directory, never fails or delays the command beyond that timeout.
 - `version` prints release version, commit and build date, injected at build time by GoReleaser ldflags.
 - Platforms: linux, darwin and windows on amd64 and arm64.
-- Module and CI: GitHub Actions, `golangci-lint`, `go vet`, `go test -race`, `govulncheck`.
+- Module and CI: GitHub Actions, `golangci-lint`, `go vet`, `go test -race`, informational benchmarks, `govulncheck`.
 - Go version: the current stable release at the time of scaffolding, pinned in `go.mod` and CI.
 
 ## Repositories and layout
@@ -110,7 +110,7 @@ Delivered in this order, names may be refined during the specification step:
 | 0.2.x | `diagnose` for deployments, statefulsets, daemonsets, pods, jobs and services |
 | 0.3.x | `plan`, `scale`, `rollout restart` |
 | 0.4.x | `apply`, `delete` with safeguards |
-| 0.5.x | sample non-Kubernetes module in the SDK, compatibility matrix hardening, performance tests |
+| 0.5.x | compatibility matrix hardening, performance tests |
 
 The first slice also includes `setup hooks` and the skill, so agents can use it from day one.
 Breaking changes stay in `0.x` until the captain declares `1.0` (my call; the release tooling is configured so a breaking commit does not jump to 1.0.0).
@@ -122,7 +122,7 @@ Breaking changes stay in `0.x` until the captain declares `1.0` (my call; the re
 - One release workflow runs semantic-release, which runs GoReleaser through the exec plugin with the computed version.
   This avoids relying on a tag pushed by the default token triggering a second workflow.
 - GoReleaser builds archives per platform, a `checksums.txt`, and publishes the GitHub Release.
-- CI on every PR: format check, lint, vet, unit tests with the race detector, `govulncheck`, a build of all targets, a commitlint check on the PR title.
+- CI on every PR: format check, lint, vet, unit tests with the race detector, informational benchmarks, `govulncheck`, a build of all targets, a commitlint check on the PR title.
 - Integration job: `kind` clusters for each of the five supported minors, running the integration and acceptance tests.
 - The SDK repository has the same pipeline minus the cluster jobs.
 

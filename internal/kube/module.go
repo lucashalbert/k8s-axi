@@ -19,7 +19,7 @@ const (
 	envPrefix    = "K8S_AXI_"
 	defaultLimit = 50
 	// listChunk is the page size when a list is read without a row limit.
-	// ponytail: pages are still collected before rendering, so memory grows with
+	// Note: pages are still collected before rendering, so memory grows with
 	// the collection under --limit 0; render per page if that ever matters.
 	listChunk = 500
 	// crdChunk is the page size for reading CRDs, whose schemas make them large.
