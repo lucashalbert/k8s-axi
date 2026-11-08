@@ -96,7 +96,8 @@ func Load(opts Options) (*Clients, error) {
 		return nil, axierr.Runtime("create client", "context/"+name, err, "")
 	}
 	c.Discovery = dc
-	c.Mapper = restmapper.NewDeferredDiscoveryRESTMapper(memory.NewMemCacheClient(dc))
+	cached := memory.NewMemCacheClient(dc)
+	c.Mapper = restmapper.NewShortcutExpander(restmapper.NewDeferredDiscoveryRESTMapper(cached), cached, func(string) {})
 	return c, nil
 }
 
