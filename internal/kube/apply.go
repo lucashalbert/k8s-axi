@@ -413,7 +413,7 @@ type applyObject struct {
 }
 
 type applyResult struct {
-	Status     string        `json:"status"` // applied or validated
+	Status     string        `json:"status"` // applied or validated; partial or failed when objects failed
 	Created    int           `json:"created"`
 	Configured int           `json:"configured"`
 	Unchanged  int           `json:"unchanged"`
@@ -424,6 +424,18 @@ type applyResult struct {
 type applyOut struct {
 	Result applyResult `json:"result"`
 	Next   []string    `json:"next,omitempty"`
+}
+
+// settle names the outcome once every object is in: failed objects make it
+// "partial" when others went through, and "failed" when none did.
+func (r *applyResult) settle() {
+	switch {
+	case r.Failed == 0:
+	case r.Created+r.Configured+r.Unchanged == 0:
+		r.Status = "failed"
+	default:
+		r.Status = "partial"
+	}
 }
 
 func (r *applyResult) add(o applyObject) {
@@ -459,6 +471,7 @@ func (j *applyJob) validate() applyResult {
 		}
 		res.add(o)
 	}
+	res.settle()
 	return res
 }
 
@@ -485,6 +498,7 @@ func (j *applyJob) execute(ctx context.Context) applyResult {
 		}
 		res.add(o)
 	}
+	res.settle()
 	return res
 }
 

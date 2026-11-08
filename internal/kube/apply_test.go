@@ -350,7 +350,7 @@ func TestApplyPartialFailure(t *testing.T) {
 	docs := jsonDocs(t, out)
 	res := docs[1]["result"].(map[string]any)
 	st := objStatuses(t, res)
-	if st["configmap/cfg"] != "created" || st["deployment/bad"] != "failed" || res["failed"] != float64(1) || res["created"] != float64(1) {
+	if st["configmap/cfg"] != "created" || st["deployment/bad"] != "failed" || res["failed"] != float64(1) || res["created"] != float64(1) || res["status"] != "partial" {
 		t.Errorf("result = %v", res)
 	}
 	if !e.has(configGVR, "default", "cfg") {
