@@ -10,6 +10,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	clienttesting "k8s.io/client-go/testing"
+
+	"github.com/lucashalbert/axi-sdk-go/redact"
 )
 
 func event(ns, name, typ, reason, kind, obj string, ago time.Duration) *corev1.Event {
@@ -208,6 +210,23 @@ func TestEventsMessageIsCutInCompactAndWholeInFull(t *testing.T) {
 	for _, k := range []string{"first_seen", "last_seen", "component", "uid"} {
 		if _, ok := row[k]; !ok {
 			t.Errorf("--full row lacks %s: %v", k, row)
+		}
+	}
+}
+
+func TestEventsMessagesAreRedacted(t *testing.T) {
+	leak := "sentinelTok123abc"
+	secret := event("default", "secret", "Warning", "Secret", "Pod", "a", time.Minute)
+	secret.Message = "first token=" + leak + "\nsecond"
+	c := eventsFixture(t, secret)
+	for _, args := range [][]string{{"events"}, {"events", "--full"}} {
+		m := runJSON(t, c, args...)
+		msg := m["events"].([]any)[0].(map[string]any)["message"].(string)
+		if strings.Contains(msg, leak) || !strings.Contains(msg, redact.Placeholder) {
+			t.Errorf("%v message leaked or was not redacted: %q", args, msg)
+		}
+		if strings.Contains(msg, "\n") || !strings.Contains(msg, "second") {
+			t.Errorf("%v message was not normalized: %q", args, msg)
 		}
 	}
 }

@@ -169,7 +169,13 @@ func (g *globals) logs(ctx context.Context, c *Clients, args []string, o logOpts
 		return out, axierr.Usage("logs", fmt.Sprintf("no pod of %s has a container named %q", tgt.label, o.container), "check the names with 'k8s-axi inspect pod NAME'")
 	}
 
-	budget := max(o.maxBytes/len(jobs), minStreamBytes)
+	skippedStreams := 0
+	if maxStreams := o.maxBytes / minStreamBytes; len(jobs) > maxStreams {
+		skippedStreams = len(jobs) - maxStreams
+		jobs = jobs[:maxStreams]
+		out.Truncated = true
+	}
+	budget := o.maxBytes / len(jobs)
 	var failed []string
 	for _, j := range jobs {
 		s, redacted, err := readStream(ctx, c, ns, j.pod, j.container, o, budget)
@@ -188,7 +194,7 @@ func (g *globals) logs(ctx context.Context, c *Clients, args []string, o logOpts
 		}
 		return out, axierr.Runtime("logs", "context/"+c.Context+" "+tgt.label, fmt.Errorf("%s", failed[0]), hint)
 	}
-	out.Note = logsNote(out, len(tgt.pods), len(pods), o)
+	out.Note = logsNote(out, len(tgt.pods), len(pods), skippedStreams, o)
 	out.Next = g.logsNext(out)
 	return out, nil
 }
@@ -343,12 +349,15 @@ func shapeLog(raw string, tail, budget int) (lines []string, truncated bool, red
 	return lines, truncated, redacted
 }
 
-func logsNote(out logsOut, matched, shown int, o logOpts) string {
+func logsNote(out logsOut, matched, shown, skippedStreams int, o logOpts) string {
 	var notes []string
 	if matched > shown {
 		notes = append(notes, fmt.Sprintf("showing %d of %d pods (first by name); name a pod or narrow with -l to see others", shown, matched))
 	}
-	if out.Truncated {
+	if skippedStreams > 0 {
+		notes = append(notes, fmt.Sprintf("%d stream(s) left unread so --max-bytes %d stays within the whole response", skippedStreams, o.maxBytes))
+	}
+	if logsWereCut(out) {
 		notes = append(notes, fmt.Sprintf("older lines were left out (--tail %d, --max-bytes %d); raise them or narrow with --since", o.tail, o.maxBytes))
 	}
 	total := 0
@@ -367,6 +376,15 @@ func logsNote(out logsOut, matched, shown int, o logOpts) string {
 		notes = append(notes, fmt.Sprintf("%d credential-looking value(s) were redacted", out.Redacted))
 	}
 	return strings.Join(notes, "; ")
+}
+
+func logsWereCut(out logsOut) bool {
+	for _, s := range out.Streams {
+		if s.Truncated {
+			return true
+		}
+	}
+	return false
 }
 
 func (g *globals) logsNext(out logsOut) []string {

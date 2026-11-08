@@ -122,6 +122,19 @@ func TestInspectRelatedEvents(t *testing.T) {
 	}
 }
 
+func TestInspectRelatedEventsRedactMessages(t *testing.T) {
+	leak := "sentinelTok123abc"
+	p := runningPod("default", "sensitive", nil)
+	ev := event("default", "secret", "Warning", "Secret", "Pod", "sensitive", time.Minute)
+	ev.Message = "token=" + leak
+	c, _ := readFixture(t, []runtime.Object{p, ev})
+	items := runJSON(t, c, "inspect", "pod", "sensitive")["events"].(map[string]any)["items"].([]any)
+	msg := items[0].(map[string]any)["message"].(string)
+	if strings.Contains(msg, leak) {
+		t.Errorf("related event message leaked: %q", msg)
+	}
+}
+
 func TestInspectEventsAreBounded(t *testing.T) {
 	freezeTime(t)
 	var objs []runtime.Object

@@ -14,6 +14,7 @@ import (
 	"github.com/lucashalbert/axi-sdk-go/axierr"
 	"github.com/lucashalbert/axi-sdk-go/cli"
 	"github.com/lucashalbert/axi-sdk-go/output"
+	"github.com/lucashalbert/axi-sdk-go/redact"
 )
 
 const (
@@ -161,7 +162,7 @@ func eventRows(evs []corev1.Event, showNS, full bool) any {
 			e := &evs[i]
 			r := eventRowFull{Age: age(eventTime(e)), Type: e.Type, Reason: e.Reason, Object: objectRef(e), Count: eventCount(e),
 				FirstSeen: e.FirstTimestamp.UTC().Format(time.RFC3339), LastSeen: eventTime(e).UTC().Format(time.RFC3339),
-				Component: component(e), UID: string(e.InvolvedObject.UID), Message: e.Message}
+				Component: component(e), UID: string(e.InvolvedObject.UID), Message: eventMessage(e.Message)}
 			if showNS {
 				r.Namespace = e.Namespace
 			}
@@ -173,13 +174,17 @@ func eventRows(evs []corev1.Event, showNS, full bool) any {
 	for i := range evs {
 		e := &evs[i]
 		r := eventRow{Age: age(eventTime(e)), Type: e.Type, Reason: e.Reason, Object: objectRef(e), Count: eventCount(e),
-			Message: truncate(strings.Join(strings.Fields(e.Message), " "), messageWidth)}
+			Message: truncate(eventMessage(e.Message), messageWidth)}
 		if showNS {
 			r.Namespace = e.Namespace
 		}
 		rows = append(rows, r)
 	}
 	return rows
+}
+
+func eventMessage(s string) string {
+	return redact.Mask(strings.Join(strings.Fields(s), " "))
 }
 
 func objectRef(e *corev1.Event) string { return e.InvolvedObject.Kind + "/" + e.InvolvedObject.Name }

@@ -230,6 +230,24 @@ func TestLogsByteBudgetIsSharedAcrossStreams(t *testing.T) {
 	}
 }
 
+func TestLogsDropsStreamsWhenMinimumWouldExceedTotalBudget(t *testing.T) {
+	freezeTime(t)
+	var objs []runtime.Object
+	for i := 1; i <= 5; i++ {
+		objs = append(objs, runningPod("default", fmt.Sprintf("tight-%d", i), map[string]string{"app": "tight"}))
+	}
+	c, _ := readFixture(t, objs)
+	calls := stubLogs(t, func(string, string) (string, error) { return "ok\n", nil })
+	m := runJSON(t, c, "logs", "-l", "app=tight", "--max-bytes", "1024")
+	if len(m["streams"].([]any)) != 1 || len(*calls) != 1 || m["truncated"] != true {
+		t.Fatalf("budget was not enforced before opening streams: %v calls=%d", m, len(*calls))
+	}
+	note := m["note"].(string)
+	if !strings.Contains(note, "4 stream(s) left unread") || strings.Contains(note, "older lines were left out") {
+		t.Errorf("note = %q", note)
+	}
+}
+
 func TestLogsRedactsCredentials(t *testing.T) {
 	c := logsFixture(t)
 	key := "-----BEGIN RSA PRIVATE KEY-----\nMIIEowIBAAKCAQEAsecretkeymaterial\nmore+key+lines\n-----END RSA PRIVATE KEY-----"
