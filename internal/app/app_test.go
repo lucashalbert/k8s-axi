@@ -47,23 +47,30 @@ func TestUnknownFlagErrorIsOnStdout(t *testing.T) {
 }
 
 func TestUsageErrorIsOnStdoutJSON(t *testing.T) {
-	code, out, stderr := run(t, "scale", "deploy/web", "-n", "default", "--json")
-	if code != 2 || stderr != "" {
-		t.Fatalf("exit %d (want 2), stderr %q (want empty)", code, stderr)
-	}
-	var got struct {
-		Error map[string]any `json:"error"`
-	}
-	if err := json.Unmarshal([]byte(out), &got); err != nil {
-		t.Fatalf("not JSON: %v\n%s", err, out)
-	}
-	for _, k := range []string{"op", "message", "hint"} {
-		if s, _ := got.Error[k].(string); s == "" {
-			t.Errorf("error.%s missing: %v", k, got.Error)
-		}
-	}
-	if got.Error["exit"] != float64(2) {
-		t.Errorf("error.exit = %v, want 2", got.Error["exit"])
+	for name, args := range map[string][]string{
+		"usage error":  {"scale", "deploy/web", "-n", "default", "--json"},
+		"unknown flag": {"version", "--nope", "--json"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			code, out, stderr := run(t, args...)
+			if code != 2 || stderr != "" {
+				t.Fatalf("exit %d (want 2), stderr %q (want empty)", code, stderr)
+			}
+			var got struct {
+				Error map[string]any `json:"error"`
+			}
+			if err := json.Unmarshal([]byte(out), &got); err != nil {
+				t.Fatalf("not JSON: %v\n%s", err, out)
+			}
+			for _, k := range []string{"op", "message", "hint"} {
+				if s, _ := got.Error[k].(string); s == "" {
+					t.Errorf("error.%s missing: %v", k, got.Error)
+				}
+			}
+			if got.Error["exit"] != float64(2) {
+				t.Errorf("error.exit = %v, want 2", got.Error["exit"])
+			}
+		})
 	}
 }
 
