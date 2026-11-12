@@ -17,6 +17,7 @@ go install github.com/lucashalbert/k8s-axi/cmd/k8s-axi@latest
 ## Usage
 
 ```sh
+k8s-axi                               # home view: live context, server, version, namespace, plus next steps
 k8s-axi cluster info                  # context, API server, server version, namespace
 k8s-axi discover --kind deploy        # kinds the cluster serves, built-in and custom
 k8s-axi discover --group apps --full  # more columns
@@ -35,6 +36,14 @@ k8s-axi delete deploy/web -n prod --confirm deployment/web   # destructive: the 
 k8s-axi version
 k8s-axi update                        # install the latest release, verifying its SHA-256 checksum
 ```
+
+Run with no arguments, `k8s-axi` prints a compact home view instead of the help text.
+With a usable kubeconfig it shows `state: ready`, the context, API server, server version and namespace, and a `next` list of follow-up commands.
+When the API server does not answer within `--timeout` it shows `state: unreachable` with the redacted error.
+With no kubeconfig it shows `state: no-kubeconfig`, and with contexts but no current one it shows `state: no-current-context` and lists the contexts (cut at `--limit`).
+The home view exits 0 whenever it produced a report, like `diagnose`; a `--kubeconfig` or `--context` that does not resolve, or a kubeconfig that does not parse, is the usual error (exit 2 or 1).
+It never changes the current context.
+The full help is `k8s-axi --help` or `k8s-axi help`.
 
 Read commands:
 
@@ -144,6 +153,10 @@ k8s-axi setup skill          # install the agent skill
 Hooks default to `$CLAUDE_CONFIG_DIR/settings.json`, or `~/.claude/settings.json`.
 The skill defaults to `$CLAUDE_CONFIG_DIR/skills/k8s-axi`, or `~/.claude/skills/k8s-axi`.
 Use `--settings` or `--dest` to point either command elsewhere.
+
+`setup hooks` installs a single Claude Code `SessionStart` hook (`k8s-axi cluster info --timeout 5s`) and nothing else.
+There is no session-end hook and no session-end capture: k8s-axi keeps no state between sessions, so it has nothing to capture.
+This is a deliberate exception to AXI Principle 7 (session hooks), which expects both ends of a session to be covered.
 
 ## Development
 
