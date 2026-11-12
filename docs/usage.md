@@ -16,7 +16,7 @@ With no kubeconfig, or no current context, it says so and lists the contexts ins
 `cluster info` prints the context, API server, server version and namespace, and fails with an error when the server does not answer.
 Pick another cluster for one command with `--context NAME`.
 k8s-axi never changes the kubeconfig's current context.
-A kubeconfig with no current context is a usage error (exit 2) that lists the contexts you can choose.
+For commands that need a cluster, a kubeconfig with no current context is a usage error (exit 2) that lists the contexts you can choose.
 
 ## 2. Find and read things
 
@@ -67,7 +67,7 @@ A namespaced change without `-n` or a namespace on the context is refused.
 |---|---|---|
 | 0 | Success | |
 | 1 | Runtime or API error: unreachable server, timeout, RBAC denial, a failed object in `apply` | Read the `hint` in the error; raise `--timeout` for a slow server |
-| 2 | Usage error: unknown flag, missing `-n`, wrong `--confirm`, no current context | Fix the command; nothing was sent |
+| 2 | Usage error: unknown flag, missing `-n`, wrong `--confirm`, no current context for a cluster command | Fix the command; nothing was sent |
 
 Errors are short and structured: the operation, the target, a message and a hint.
 They never contain credentials or Secret values.
