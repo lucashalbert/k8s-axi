@@ -80,7 +80,7 @@ func waitForPodLogLine(t *testing.T, c *Clients, ns, pod, container string, prev
 	})
 }
 
-func waitForRestartedPod(t *testing.T, ns, pod string, within time.Duration) {
+func waitForRestartedPod(t *testing.T, c *Clients, ns, pod, container string, within time.Duration, previousLog string) {
 	t.Helper()
 	// Newer kubelets restart a crashing container sooner, so between restarts the
 	// status can read Error instead of CrashLoopBackOff on any given poll.
@@ -90,7 +90,22 @@ func waitForRestartedPod(t *testing.T, ns, pod string, within time.Duration) {
 			return false
 		}
 		rows := rowsOf(m, "items")
-		return len(rows) == 1 && rows[0]["restarts"].(float64) >= 1 && (rows[0]["status"] == "CrashLoopBackOff" || rows[0]["status"] == "Error")
+		if len(rows) != 1 || rows[0]["restarts"].(float64) < 1 || (rows[0]["status"] != "CrashLoopBackOff" && rows[0]["status"] != "Error") {
+			return false
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		rc, err := c.Typed.CoreV1().Pods(ns).GetLogs(pod, &corev1.PodLogOptions{
+			Container: container,
+			Previous:  true,
+			TailLines: ptr.To(int64(20)),
+		}).Stream(ctx)
+		if err != nil {
+			return false
+		}
+		defer func() { _ = rc.Close() }()
+		raw, err := io.ReadAll(rc)
+		return err == nil && strings.Contains(string(raw), previousLog)
 	})
 }
 
@@ -358,11 +373,11 @@ func TestReadCoreWorkloadOwnersEventsAndLogs(t *testing.T) {
 func TestReadCoreLogsPreviousOfARestartedContainer(t *testing.T) {
 	c, ns := itSetup(t)
 	pod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "crasher", Namespace: ns}, Spec: corev1.PodSpec{Containers: []corev1.Container{{
-		Name: "app", Image: busybox, Command: []string{"sh", "-c", "echo first-run-line; exit 1"}}}}}
+		Name: "app", Image: busybox, Command: []string{"sh", "-c", "echo first-run-line; sleep 1; exit 1"}}}}}
 	if _, err := c.Typed.CoreV1().Pods(ns).Create(context.Background(), pod, metav1.CreateOptions{}); err != nil {
 		t.Fatal(err)
 	}
-	waitForRestartedPod(t, ns, "crasher", 180*time.Second)
+	waitForRestartedPod(t, c, ns, "crasher", "app", 180*time.Second, "first-run-line")
 	waitForPodLogLine(t, c, ns, "crasher", "app", true, 60*time.Second, "first-run-line")
 	var lines []string
 	m := itJSON(t, "logs", "crasher", "--previous", "-n", ns)
