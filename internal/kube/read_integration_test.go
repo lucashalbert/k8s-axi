@@ -358,7 +358,7 @@ func TestReadCoreWorkloadOwnersEventsAndLogs(t *testing.T) {
 func TestReadCoreLogsPreviousOfARestartedContainer(t *testing.T) {
 	c, ns := itSetup(t)
 	pod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "crasher", Namespace: ns}, Spec: corev1.PodSpec{Containers: []corev1.Container{{
-		Name: "app", Image: busybox, Command: []string{"sh", "-c", "echo first-run-line; sleep 1; exit 1"}}}}}
+		Name: "app", Image: busybox, Command: []string{"sh", "-c", "echo first-run-line; exit 1"}}}}}
 	if _, err := c.Typed.CoreV1().Pods(ns).Create(context.Background(), pod, metav1.CreateOptions{}); err != nil {
 		t.Fatal(err)
 	}

@@ -115,7 +115,7 @@ func TestDiagnoseCrashLoopAndFailedJob(t *testing.T) {
 	c, ns := itSetup(t)
 	ctx := context.Background()
 	pod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "crasher", Namespace: ns}, Spec: corev1.PodSpec{Containers: []corev1.Container{{
-		Name: "app", Image: busybox, Command: []string{"sh", "-c", "echo boom-line token=sentinelTok123abc; sleep 1; exit 3"}}}}}
+		Name: "app", Image: busybox, Command: []string{"sh", "-c", "echo boom-line token=sentinelTok123abc; exit 3"}}}}}
 	job := &batchv1.Job{ObjectMeta: metav1.ObjectMeta{Name: "failing", Namespace: ns}, Spec: batchv1.JobSpec{
 		BackoffLimit: ptr.To(int32(0)),
 		Template: corev1.PodTemplateSpec{Spec: corev1.PodSpec{RestartPolicy: corev1.RestartPolicyNever, Containers: []corev1.Container{{
