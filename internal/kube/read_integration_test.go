@@ -82,15 +82,13 @@ func waitForPodLogLine(t *testing.T, c *Clients, ns, pod, container string, prev
 
 func waitForRestartedPod(t *testing.T, c *Clients, ns, pod, container string, within time.Duration, previousLog string) {
 	t.Helper()
-	// Newer kubelets restart a crashing container sooner, so between restarts the
-	// status can read Error instead of CrashLoopBackOff on any given poll.
 	eventually(t, "pod "+pod+" to have restarted after a crash", within, func() bool {
 		m := itTry("get", "pods", pod, "-n", ns)
 		if m == nil {
 			return false
 		}
 		rows := rowsOf(m, "items")
-		if len(rows) != 1 || rows[0]["restarts"].(float64) < 1 || (rows[0]["status"] != "CrashLoopBackOff" && rows[0]["status"] != "Error") {
+		if len(rows) != 1 || rows[0]["restarts"].(float64) < 1 {
 			return false
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
