@@ -17,20 +17,22 @@ import (
 	"github.com/lucashalbert/axi-sdk-go/update"
 )
 
-// testRoot builds the real command tree around fake clients.
-// splitErr adapts the SDK's stdout errors to assertions written for stderr:
-// stderr gains any stdout holding an error document, and stdout is emptied when
-// that error is all it held. A result followed by an error stays on stdout.
-func splitErr(stdout, stderr string) (string, string) {
-	if !strings.Contains(stdout, "error:\n  op:") && !strings.Contains(stdout, `{"error":`) {
-		return stdout, stderr
+func requireStdoutError(t testing.TB, stdout, stderr string, wants ...string) {
+	t.Helper()
+	if stderr != "" {
+		t.Errorf("stderr should be empty: %s", stderr)
 	}
-	if s := strings.TrimSpace(stdout); strings.HasPrefix(s, "error:") || strings.HasPrefix(s, `{"error":`) {
-		return "", stderr + stdout
+	if stdout == "" {
+		t.Error("stdout should contain error output")
 	}
-	return stdout, stderr + stdout
+	for _, want := range wants {
+		if !strings.Contains(stdout, want) {
+			t.Errorf("error output missing %q:\n%s", want, stdout)
+		}
+	}
 }
 
+// testRoot builds the real command tree around fake clients.
 func testRoot(t testing.TB, c *Clients, loadErr error) (root *cobra.Command, stdout, stderr *bytes.Buffer) {
 	t.Helper()
 	t.Setenv("K8S_AXI_NO_UPDATE_CHECK", "1")
@@ -97,20 +99,13 @@ func TestClusterInfoUnreachableIsRuntimeError(t *testing.T) {
 	if code := cli.Execute(root); code != 1 {
 		t.Fatalf("exit %d, want 1", code)
 	}
-	stdout, stderr := splitErr(out.String(), errb.String())
-	if stdout != "" {
-		t.Errorf("stdout should be empty: %s", stdout)
-	}
-	for _, want := range []string{"kind-test", "connection refused", "hint"} {
-		if !strings.Contains(stderr, want) {
-			t.Errorf("error output missing %q:\n%s", want, stderr)
-		}
-	}
-	if strings.Contains(stderr, "goroutine") {
+	stdout := out.String()
+	requireStdoutError(t, stdout, errb.String(), "kind-test", "connection refused", "hint")
+	if strings.Contains(stdout, "goroutine") {
 		t.Error("stack trace in error output")
 	}
-	if strings.Contains(stderr, "user") || strings.Contains(stderr, "pw") {
-		t.Errorf("credentials leaked in error output:\n%s", stderr)
+	if strings.Contains(stdout, "user") || strings.Contains(stdout, "pw") {
+		t.Errorf("credentials leaked in error output:\n%s", stdout)
 	}
 }
 
@@ -120,7 +115,8 @@ func TestLoadUsageErrorPropagates(t *testing.T) {
 	if code := cli.Execute(root); code != 2 {
 		t.Fatalf("exit %d, want 2", code)
 	}
-	if !strings.Contains(out.String()+errb.String(), "alpha") {
+	requireStdoutError(t, out.String(), errb.String(), "alpha")
+	if !strings.Contains(out.String(), "beta") {
 		t.Errorf("contexts not listed: %s", out)
 	}
 }

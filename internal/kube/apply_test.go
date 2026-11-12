@@ -128,11 +128,9 @@ func TestApplyConflictThenForce(t *testing.T) {
 	if code != 1 {
 		t.Fatalf("exit %d, want 1\n%s%s", code, out, errOut)
 	}
+	requireStdoutError(t, out, errOut, "--force-conflicts")
 	if got := planChanges(t, out); len(got) != 1 || !strings.HasPrefix(got[0], "conflict deployment/web -n default: .spec.replicas (owned by \"helm\")") {
 		t.Errorf("changes = %v", got)
-	}
-	if !strings.Contains(errOut, "--force-conflicts") {
-		t.Errorf("the error must name the flag: %s", errOut)
 	}
 	if st := objStatuses(t, jsonDocs(t, out)[1]["result"].(map[string]any)); st["deployment/web"] != "failed" {
 		t.Errorf("statuses = %v", st)
@@ -200,9 +198,11 @@ func TestApplyDryRunServerChangesNothing(t *testing.T) {
 		t.Errorf("next = %v, want the apply command", next)
 	}
 
-	code, _, errOut = applyRun(t, e, file, "-n", "default", "--dry-run=client")
-	if code != 2 || !strings.Contains(errOut, "--dry-run=server") {
+	code, out, errOut = applyRun(t, e, file, "-n", "default", "--dry-run=client")
+	if code != 2 {
 		t.Errorf("client dry run: exit %d: %s", code, errOut)
+	} else {
+		requireStdoutError(t, out, errOut, "--dry-run=server")
 	}
 }
 
@@ -239,11 +239,12 @@ func TestApplyNamespaceRules(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			e := newApplyEnv(t)
 			e.c.NamespaceFromContext = tc.fromCtx
-			code, _, errOut := applyRun(t, e, manifest(t, tc.body), append(tc.args, "--json")...)
-			if code != tc.wantCode || !strings.Contains(errOut, tc.wantErr) {
+			code, out, errOut := applyRun(t, e, manifest(t, tc.body), append(tc.args, "--json")...)
+			if code != tc.wantCode {
 				t.Fatalf("exit %d: %s", code, errOut)
 			}
 			if tc.wantCode != 0 {
+				requireStdoutError(t, out, errOut, tc.wantErr)
 				if len(e.calls) != 0 {
 					t.Errorf("a usage error must send nothing: %+v", e.calls)
 				}
@@ -268,9 +269,10 @@ func TestApplyRejectsBeforeTouchingTheCluster(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			e := newApplyEnv(t)
 			code, out, errOut := applyRun(t, e, manifest(t, body), "-n", "default")
-			if code != 2 || out != "" || len(e.calls) != 0 {
+			if code != 2 || len(e.calls) != 0 {
 				t.Errorf("exit %d, stdout %q, calls %v, stderr %s", code, out, e.calls, errOut)
 			}
+			requireStdoutError(t, out, errOut)
 		})
 	}
 }
@@ -339,9 +341,10 @@ func TestApplyCRDAndItsResourceInOneManifest(t *testing.T) {
 func TestApplyCRDAndResourceMustAgreeOnServedVersion(t *testing.T) {
 	e := newApplyEnv(t)
 	code, out, errOut := applyRun(t, e, manifest(t, widgetCRD+"---\n"+sprocketV2), "-n", "default", "--timeout", "20ms", "--json")
-	if code != 2 || out != "" || !strings.Contains(errOut, "does not serve acme.io/v2 Sprocket") {
+	if code != 2 {
 		t.Fatalf("exit %d, stdout %q, stderr %s", code, out, errOut)
 	}
+	requireStdoutError(t, out, errOut, "does not serve acme.io/v2 Sprocket")
 	if len(e.calls) != 0 {
 		t.Fatalf("unsupported custom resource touched the cluster: %+v", e.calls)
 	}
@@ -376,9 +379,7 @@ func TestApplyPartialFailure(t *testing.T) {
 	if code != 1 {
 		t.Fatalf("exit %d, want 1", code)
 	}
-	if !strings.Contains(errOut, "1 of 2") {
-		t.Errorf("stderr = %s", errOut)
-	}
+	requireStdoutError(t, out, errOut, "1 of 2")
 	docs := jsonDocs(t, out)
 	res := docs[1]["result"].(map[string]any)
 	st := objStatuses(t, res)
@@ -393,9 +394,11 @@ func TestApplyPartialFailure(t *testing.T) {
 func TestApplyTimeoutIsReportedPerObject(t *testing.T) {
 	e := newApplyEnv(t)
 	e.failOn["patch configmaps"] = context.DeadlineExceeded
-	code, _, errOut := applyRun(t, e, manifest(t, cfgYAML), "-n", "default")
-	if code != 1 || !strings.Contains(errOut, "--timeout") {
+	code, out, errOut := applyRun(t, e, manifest(t, cfgYAML), "-n", "default")
+	if code != 1 {
 		t.Errorf("exit %d: %s", code, errOut)
+	} else {
+		requireStdoutError(t, out, errOut, "--timeout")
 	}
 }
 
@@ -426,9 +429,11 @@ func TestApplyStdin(t *testing.T) {
 
 func TestApplyNeedsAFile(t *testing.T) {
 	e := newApplyEnv(t)
-	code, _, errOut := run(t, e.c, "apply", "-n", "default")
-	if code != 2 || !strings.Contains(errOut, "-f") {
+	code, out, errOut := run(t, e.c, "apply", "-n", "default")
+	if code != 2 {
 		t.Errorf("exit %d: %s", code, errOut)
+	} else {
+		requireStdoutError(t, out, errOut, "-f")
 	}
 }
 
@@ -472,8 +477,10 @@ func TestApplyNeverEchoesSecretValues(t *testing.T) {
 func TestApplyErrorForUnreachableClients(t *testing.T) {
 	root, out, errb := testRoot(t, nil, errors.New("no kubeconfig"))
 	root.SetArgs([]string{"apply", "-f", manifest(t, cfgYAML), "-n", "default"})
-	if code := cli.Execute(root); code != 1 || !strings.Contains(out.String()+errb.String(), "no kubeconfig") {
+	if code := cli.Execute(root); code != 1 {
 		t.Errorf("output = %s", out)
+	} else {
+		requireStdoutError(t, out.String(), errb.String(), "no kubeconfig")
 	}
 }
 
@@ -481,9 +488,10 @@ func TestApplySkipsWhatWaitsForAFailedCRD(t *testing.T) {
 	e := newApplyEnv(t)
 	e.failOn["patch customresourcedefinitions"] = errors.New("boom")
 	code, out, errOut := applyRun(t, e, manifest(t, widgetCRD+"---\n"+sprocket+"---\n"+cfgYAML), "-n", "default", "--json")
-	if code != 1 || !strings.Contains(errOut, "2 of 3") {
+	if code != 1 {
 		t.Fatalf("exit %d: %s", code, errOut)
 	}
+	requireStdoutError(t, out, errOut, "2 of 3")
 	st := objStatuses(t, jsonDocs(t, out)[1]["result"].(map[string]any))
 	if st["customresourcedefinition/sprockets.acme.io"] != "failed" || st["sprocket/s1"] != "failed" || st["configmap/cfg"] != "created" {
 		t.Errorf("statuses = %v", st)
@@ -493,9 +501,11 @@ func TestApplySkipsWhatWaitsForAFailedCRD(t *testing.T) {
 func TestApplyForbiddenNamesTheVerb(t *testing.T) {
 	e := newApplyEnv(t)
 	e.failOn["patch configmaps"] = apierrors.NewForbidden(schema.GroupResource{Resource: "configmaps"}, "cfg", errors.New("no"))
-	code, _, errOut := applyRun(t, e, manifest(t, cfgYAML), "-n", "default")
-	if code != 1 || !strings.Contains(errOut, "RBAC denied 'create' on configmaps") {
+	code, out, errOut := applyRun(t, e, manifest(t, cfgYAML), "-n", "default")
+	if code != 1 {
 		t.Errorf("exit %d: %s", code, errOut)
+	} else {
+		requireStdoutError(t, out, errOut, "RBAC denied 'create' on configmaps")
 	}
 }
 

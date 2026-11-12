@@ -36,8 +36,7 @@ func runSetup(t *testing.T, args ...string) (code int, stdout, stderr string) {
 	root, out, errb := testRoot(t, nil, nil)
 	root.SetArgs(append([]string{"setup"}, args...))
 	code = cli.Execute(root)
-	stdout, stderr = splitErr(out.String(), errb.String())
-	return code, stdout, stderr
+	return code, out.String(), errb.String()
 }
 
 func parseSetupResult(t *testing.T, out string) setupResult {

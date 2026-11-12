@@ -125,10 +125,8 @@ func TestDeleteNeedsTheConfirmToken(t *testing.T) {
 			if code != 2 {
 				t.Fatalf("exit %d, want 2: %s", code, errOut)
 			}
-			if !strings.Contains(errOut, "deployment/web") || !strings.Contains(errOut, "--confirm") {
-				t.Errorf("the error must name the exact token and flag: %s", errOut)
-			}
-			if out != "" || len(e.deletes) != 0 || !e.has(deployGVR, "default", "web") {
+			requireStdoutError(t, out, errOut, "deployment/web", "--confirm")
+			if len(e.deletes) != 0 || !e.has(deployGVR, "default", "web") {
 				t.Errorf("nothing may be deleted: stdout %q, deletes %v", out, e.deletes)
 			}
 			if e.read("deployments") {
@@ -192,9 +190,11 @@ func TestDeletePropagation(t *testing.T) {
 		}
 	}
 	e := delFixture(t)
-	code, _, errOut := delRun(t, e, "deploy/web", "-n", "default", "--confirm", "deployment/web", "--propagation", "now")
-	if code != 2 || !strings.Contains(errOut, "background") || len(e.deletes) != 0 {
+	code, out, errOut := delRun(t, e, "deploy/web", "-n", "default", "--confirm", "deployment/web", "--propagation", "now")
+	if code != 2 || len(e.deletes) != 0 {
 		t.Errorf("exit %d: %s", code, errOut)
+	} else {
+		requireStdoutError(t, out, errOut, "background")
 	}
 }
 
@@ -231,9 +231,10 @@ func TestDeleteRefusesBroadForms(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			e := delFixture(t)
 			code, out, errOut := delRun(t, e, args...)
-			if code != 2 || out != "" || len(e.deletes) != 0 {
+			if code != 2 || len(e.deletes) != 0 {
 				t.Errorf("exit %d, stdout %q, deletes %v: %s", code, out, e.deletes, errOut)
 			}
+			requireStdoutError(t, out, errOut)
 		})
 	}
 }
@@ -256,9 +257,11 @@ func TestDeleteDryRunServer(t *testing.T) {
 		t.Errorf("next = %v, want the exact delete command", next)
 	}
 
-	code, _, errOut = delRun(t, e, "deploy/web", "-n", "default", "--dry-run=client")
-	if code != 2 || !strings.Contains(errOut, "--dry-run=server") {
+	code, out, errOut = delRun(t, e, "deploy/web", "-n", "default", "--dry-run=client")
+	if code != 2 {
 		t.Errorf("client dry run: exit %d: %s", code, errOut)
+	} else {
+		requireStdoutError(t, out, errOut, "--dry-run=server")
 	}
 }
 
@@ -293,15 +296,19 @@ func TestDeleteTerminatingObject(t *testing.T) {
 
 func TestDeleteFailures(t *testing.T) {
 	e := delFixture(t)
-	code, _, errOut := delRun(t, e, "deploy/ghost", "-n", "default", "--confirm", "deployment/ghost")
-	if code != 1 || !strings.Contains(errOut, "not found") && !strings.Contains(errOut, "check the name") {
+	code, out, errOut := delRun(t, e, "deploy/ghost", "-n", "default", "--confirm", "deployment/ghost")
+	if code != 1 {
 		t.Errorf("not found: exit %d: %s", code, errOut)
+	} else {
+		requireStdoutError(t, out, errOut, "not found")
 	}
 	e = delFixture(t)
 	e.failOn["delete deployments"] = apierrors.NewForbidden(schema.GroupResource{Group: "apps", Resource: "deployments"}, "web", nil)
-	code, _, errOut = delRun(t, e, "deploy/web", "-n", "default", "--confirm", "deployment/web")
-	if code != 1 || !strings.Contains(errOut, "RBAC denied 'delete'") {
+	code, out, errOut = delRun(t, e, "deploy/web", "-n", "default", "--confirm", "deployment/web")
+	if code != 1 {
 		t.Errorf("forbidden: exit %d: %s", code, errOut)
+	} else {
+		requireStdoutError(t, out, errOut, "RBAC denied 'delete'")
 	}
 	// The object is replaced between the plan and the delete: the UID
 	// precondition stops the stale delete from removing the new one.
@@ -313,8 +320,10 @@ func TestDeleteFailures(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	code, _, errOut = delRun(t, e, "deploy/web", "-n", "default", "--confirm", "deployment/web")
-	if code != 1 || !e.has(deployGVR, "default", "web") || !strings.Contains(errOut, "re-run") {
+	code, out, errOut = delRun(t, e, "deploy/web", "-n", "default", "--confirm", "deployment/web")
+	if code != 1 || !e.has(deployGVR, "default", "web") {
 		t.Errorf("stale uid: exit %d: %s", code, errOut)
+	} else {
+		requireStdoutError(t, out, errOut, "re-run")
 	}
 }

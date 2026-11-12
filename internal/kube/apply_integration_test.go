@@ -20,10 +20,10 @@ import (
 // apply and delete against a real cluster. Each test works in its own
 // namespace, and the kubeconfig the commands read must come out unchanged.
 
-func itKubectl(t *testing.T, kc string, args ...string) (code int, docs []map[string]any, errOut string) {
+func itKubectl(t *testing.T, kc string, args ...string) (code int, docs []map[string]any, out, errOut string) {
 	t.Helper()
-	code, out, errOut := realRoot(append(args, "--kubeconfig", kc, "--context", "real", "--json")...)
-	return code, jsonDocs(t, out), errOut
+	code, out, errOut = realRoot(append(args, "--kubeconfig", kc, "--context", "real", "--json")...)
+	return code, jsonDocs(t, out), out, errOut
 }
 
 func itStatuses(t *testing.T, docs []map[string]any) map[string]string {
@@ -90,7 +90,7 @@ func TestApplyCRDAndCustomResource(t *testing.T) {
 
 	// The custom resource is listed before its CRD, which the command orders.
 	file := writeFile(t, t.TempDir(), "all.yaml", itSprocketYAML(group, 9)+"---\n"+itCRDYAML(group))
-	code, docs, errOut := itKubectl(t, kc, "apply", "-f", file, "-n", ns)
+	code, docs, _, errOut := itKubectl(t, kc, "apply", "-f", file, "-n", ns)
 	if code != 0 {
 		t.Fatalf("exit %d: %s", code, errOut)
 	}
@@ -102,7 +102,7 @@ func TestApplyCRDAndCustomResource(t *testing.T) {
 	}
 
 	// Again: nothing to do.
-	code, docs, errOut = itKubectl(t, kc, "apply", "-f", file, "-n", ns)
+	code, docs, _, errOut = itKubectl(t, kc, "apply", "-f", file, "-n", ns)
 	if code != 0 || docs[0]["plan"].(map[string]any)["noop"] != true {
 		t.Fatalf("re-apply: exit %d, plan %v, %s", code, docs, errOut)
 	}
@@ -114,7 +114,7 @@ func TestApplyCRDAndCustomResource(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, dir, "10-sprocket.yaml", itSprocketYAML(group, 12))
 	writeFile(t, dir, "20-cm.json", `{"apiVersion":"v1","kind":"ConfigMap","metadata":{"name":"cfg"},"data":{"a":"1"}}`)
-	code, docs, errOut = itKubectl(t, kc, "apply", "-f", dir, "-n", ns, "--dry-run=server")
+	code, docs, _, errOut = itKubectl(t, kc, "apply", "-f", dir, "-n", ns, "--dry-run=server")
 	if code != 0 {
 		t.Fatalf("dry run: exit %d: %s", code, errOut)
 	}
@@ -124,7 +124,7 @@ func TestApplyCRDAndCustomResource(t *testing.T) {
 	if got := teeth(); got != 9 {
 		t.Errorf("a dry run changed teeth to %d", got)
 	}
-	code, docs, errOut = itKubectl(t, kc, "apply", "-f", dir, "-n", ns)
+	code, docs, _, errOut = itKubectl(t, kc, "apply", "-f", dir, "-n", ns)
 	if code != 0 {
 		t.Fatalf("exit %d: %s", code, errOut)
 	}
@@ -144,7 +144,7 @@ func TestApplyConflictNeedsForce(t *testing.T) {
 	itDeployment(t, c, ns, "web", 1) // created by another field manager
 	file := writeFile(t, t.TempDir(), "web.yaml", "apiVersion: apps/v1\nkind: Deployment\nmetadata: {name: web}\nspec: {replicas: 3}\n")
 
-	code, docs, errOut := itKubectl(t, kc, "apply", "-f", file, "-n", ns)
+	code, docs, out, errOut := itKubectl(t, kc, "apply", "-f", file, "-n", ns)
 	if code != 1 {
 		t.Fatalf("exit %d, want 1: %s", code, errOut)
 	}
@@ -152,14 +152,12 @@ func TestApplyConflictNeedsForce(t *testing.T) {
 	if len(changes) != 1 || !strings.HasPrefix(changes[0].(string), "conflict deployment/web") || !strings.Contains(changes[0].(string), ".spec.replicas") {
 		t.Errorf("changes = %v", changes)
 	}
-	if !strings.Contains(errOut, "--force-conflicts") {
-		t.Errorf("stderr = %s", errOut)
-	}
+	requireStdoutError(t, out, errOut, "--force-conflicts")
 	if got := itReplicas(t, c, ns, "web"); got != 1 {
 		t.Errorf("a conflict changed replicas to %d", got)
 	}
 
-	code, docs, errOut = itKubectl(t, kc, "apply", "-f", file, "-n", ns, "--force-conflicts")
+	code, docs, _, errOut = itKubectl(t, kc, "apply", "-f", file, "-n", ns, "--force-conflicts")
 	if code != 0 {
 		t.Fatalf("forced: exit %d: %s", code, errOut)
 	}
@@ -216,8 +214,10 @@ metadata: {name: %[1]s}
 	// Invalid objects fail alone and never echo values.
 	bad := writeFile(t, t.TempDir(), "bad.yaml", fmt.Sprintf("apiVersion: v1\nkind: Secret\nmetadata: {name: Bad_Name}\nstringData: {password: %s}\n---\napiVersion: v1\nkind: ConfigMap\nmetadata: {name: ok}\n", value))
 	code, out, errOut := realRoot("apply", "-f", bad, "-n", ns, "--kubeconfig", kc, "--context", "real")
-	if code != 1 || strings.Contains(out+errOut, value) || !strings.Contains(errOut, "1 of 2") {
+	if code != 1 || strings.Contains(out+errOut, value) {
 		t.Errorf("partial failure: exit %d\n%s%s", code, out, errOut)
+	} else {
+		requireStdoutError(t, out, errOut, "1 of 2")
 	}
 	if _, err := c.Typed.CoreV1().ConfigMaps(ns).Get(context.Background(), "ok", metav1.GetOptions{}); err != nil {
 		t.Errorf("the valid object must still be applied: %v", err)
@@ -241,26 +241,30 @@ func TestDeleteNeedsTheExactToken(t *testing.T) {
 		{"delete", "deploy/web", "-n", ns, "--confirm", "deployment/other"},
 	} {
 		code, out, errOut := realRoot(append(args, "--kubeconfig", kc, "--context", "real")...)
-		if code != 2 || out != "" || !strings.Contains(errOut, "deployment/web") || !strings.Contains(errOut, "--confirm") {
+		if code != 2 {
 			t.Errorf("%v: exit %d stdout=%q stderr=%s", args, code, out, errOut)
+		} else {
+			requireStdoutError(t, out, errOut, "deployment/web", "--confirm")
 		}
 		if !exists("web") {
 			t.Fatalf("%v deleted the deployment", args)
 		}
 	}
 	for _, args := range [][]string{{"delete", "deploy", "--all", "-n", ns}, {"delete", "deploy", "-l", "app=web", "-n", ns}, {"delete", "deploy/*", "-n", ns, "--confirm", "deployment/*"}} {
-		if code, _, _ := realRoot(append(args, "--kubeconfig", kc, "--context", "real")...); code != 2 || !exists("web") {
+		if code, out, errOut := realRoot(append(args, "--kubeconfig", kc, "--context", "real")...); code != 2 || !exists("web") {
 			t.Errorf("%v: exit %d, exists %v", args, code, exists("web"))
+		} else {
+			requireStdoutError(t, out, errOut)
 		}
 	}
 
 	// A dry run needs no token and deletes nothing.
-	code, docs, errOut := itKubectl(t, kc, "delete", "deploy/web", "-n", ns, "--dry-run=server")
+	code, docs, _, errOut := itKubectl(t, kc, "delete", "deploy/web", "-n", ns, "--dry-run=server")
 	if code != 0 || docs[1]["result"].(map[string]any)["status"] != "validated" || !exists("web") {
 		t.Fatalf("dry run: exit %d: %s %v", code, errOut, docs)
 	}
 
-	code, docs, errOut = itKubectl(t, kc, "delete", "deploy/web", "-n", ns, "--confirm", "deployment/web")
+	code, docs, _, errOut = itKubectl(t, kc, "delete", "deploy/web", "-n", ns, "--confirm", "deployment/web")
 	if code != 0 {
 		t.Fatalf("exit %d: %s", code, errOut)
 	}
@@ -292,7 +296,7 @@ func TestDeleteWarnsForNamespaceAndCRD(t *testing.T) {
 		{"namespace/" + ns, "namespace/" + ns, "every object in it"},
 		{"crd/" + crd.GetName(), "customresourcedefinition/" + crd.GetName(), "Gadget." + group},
 	} {
-		code, docs, errOut := itKubectl(t, kc, "delete", tc.target, "--confirm", tc.token, "--dry-run=server")
+		code, docs, _, errOut := itKubectl(t, kc, "delete", tc.target, "--confirm", tc.token, "--dry-run=server")
 		if code != 0 {
 			t.Fatalf("%s: exit %d: %s", tc.target, code, errOut)
 		}

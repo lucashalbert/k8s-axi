@@ -137,11 +137,15 @@ func TestEventsFilters(t *testing.T) {
 	if got := strings.Join(reasons(runJSON(t, c, "events", "--since", "15m")), ","); got != "BackOff,Pulled" {
 		t.Errorf("--since 15m = %s", got)
 	}
-	if code, _, _ := run(t, c, "events", "--type", "Bogus"); code != 2 {
+	if code, out, errOut := run(t, c, "events", "--type", "Bogus"); code != 2 {
 		t.Errorf("bad --type exit %d, want 2", code)
+	} else {
+		requireStdoutError(t, out, errOut)
 	}
-	if code, _, _ := run(t, c, "events", "--since", "soon"); code != 2 {
+	if code, out, errOut := run(t, c, "events", "--since", "soon"); code != 2 {
 		t.Errorf("bad --since exit %d, want 2", code)
+	} else {
+		requireStdoutError(t, out, errOut)
 	}
 }
 
@@ -251,8 +255,10 @@ func TestEventsMessagesAreRedacted(t *testing.T) {
 func TestEventsUsageErrors(t *testing.T) {
 	c := eventsFixture(t)
 	for _, args := range [][]string{{"events", "pods"}, {"events", "a", "b", "c"}, {"events", "frobnicators/x"}, {"events", "-n", "x", "-A"}} {
-		if code, _, _ := run(t, c, args...); code != 2 {
+		if code, out, errOut := run(t, c, args...); code != 2 {
 			t.Errorf("%v: exit %d, want 2", args, code)
+		} else {
+			requireStdoutError(t, out, errOut)
 		}
 	}
 }

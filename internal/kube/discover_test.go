@@ -64,8 +64,7 @@ func runDiscover(t *testing.T, c *Clients, args ...string) (code int, out map[st
 			t.Fatalf("%v\n%s", err, stdout)
 		}
 	}
-	so, se := splitErr(stdout.String(), stderr.String())
-	return code, out, so, se
+	return code, out, stdout.String(), stderr.String()
 }
 
 func kinds(out map[string]any) map[string]map[string]any {
@@ -226,12 +225,10 @@ func TestDiscoverRuntimeErrorRedactsURLUserinfo(t *testing.T) {
 	if code := cli.Execute(root); code != 1 {
 		t.Fatalf("exit %d, want 1", code)
 	}
-	stdout, stderr := splitErr(out.String(), errb.String())
-	if stdout != "" {
-		t.Errorf("stdout should be empty: %s", stdout)
-	}
-	if strings.Contains(stderr, "user") || strings.Contains(stderr, "pw") {
-		t.Errorf("credentials leaked in error output:\n%s", stderr)
+	stdout := out.String()
+	requireStdoutError(t, stdout, errb.String(), "connection refused")
+	if strings.Contains(stdout, "user") || strings.Contains(stdout, "pw") {
+		t.Errorf("credentials leaked in error output:\n%s", stdout)
 	}
 }
 

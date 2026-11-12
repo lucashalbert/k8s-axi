@@ -72,22 +72,28 @@ func TestPlanDegradesWithoutServerDryRun(t *testing.T) {
 	}
 
 	// The same server limit is an error when the caller asked for server validation.
-	code, _, errOut = run(t, e.c, "scale", "deploy/web", "--replicas", "5", "--dry-run=server", "-n", "default")
-	if code != 1 || !strings.Contains(errOut, "does not support dry-run") {
+	code, out, errOut = run(t, e.c, "scale", "deploy/web", "--replicas", "5", "--dry-run=server", "-n", "default")
+	if code != 1 {
 		t.Errorf("exit %d: %s", code, errOut)
+	} else {
+		requireStdoutError(t, out, errOut, "does not support dry-run")
 	}
 }
 
 func TestPlanTakesNoDryRunFlag(t *testing.T) {
 	e := scaleEnv(t)
-	if code, _, _ := run(t, e.c, "plan", "scale", "deploy/web", "--replicas", "5", "--dry-run=server", "-n", "default"); code != 2 {
+	if code, out, errOut := run(t, e.c, "plan", "scale", "deploy/web", "--replicas", "5", "--dry-run=server", "-n", "default"); code != 2 {
 		t.Errorf("exit %d, want 2", code)
+	} else {
+		requireStdoutError(t, out, errOut)
 	}
 }
 
 func TestPlanNeedsNamespace(t *testing.T) {
 	e := scaleEnv(t)
-	if code, _, _ := run(t, e.c, "plan", "scale", "deploy/web", "--replicas", "5"); code != 2 {
+	if code, out, errOut := run(t, e.c, "plan", "scale", "deploy/web", "--replicas", "5"); code != 2 {
 		t.Errorf("exit %d, want 2", code)
+	} else {
+		requireStdoutError(t, out, errOut)
 	}
 }

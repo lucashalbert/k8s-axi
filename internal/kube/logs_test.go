@@ -125,9 +125,11 @@ func TestLogsContainerSelection(t *testing.T) {
 	if len(one) != 1 || logLines(one[0].(map[string]any))[0] != "from init" {
 		t.Errorf("init container by name: %v", one)
 	}
-	code, _, errOut := run(t, c, "logs", "multi", "-c", "nope")
-	if code != 2 || !strings.Contains(errOut, "app, sidecar, init") {
+	code, out, errOut := run(t, c, "logs", "multi", "-c", "nope")
+	if code != 2 {
 		t.Errorf("unknown container: exit %d: %s", code, errOut)
+	} else {
+		requireStdoutError(t, out, errOut, "app, sidecar, init")
 	}
 }
 
@@ -149,8 +151,10 @@ func TestLogsWorkloadTargets(t *testing.T) {
 func TestLogsWorkloadInAnotherNamespaceIsNotFound(t *testing.T) {
 	c := logsFixture(t)
 	stubLogs(t, func(string, string) (string, error) { return "x", nil })
-	if code, _, _ := run(t, c, "logs", "deploy/web", "-n", "other"); code != 1 {
+	if code, out, errOut := run(t, c, "logs", "deploy/web", "-n", "other"); code != 1 {
 		t.Errorf("exit %d, want 1", code)
+	} else {
+		requireStdoutError(t, out, errOut)
 	}
 }
 
@@ -385,9 +389,10 @@ func TestLogsFailsWhenNothingCanBeRead(t *testing.T) {
 		return "", errors.New(`Get "https://u:pw@h:1/log": previous terminated container "app" not found`)
 	})
 	code, out, errOut := run(t, c, "logs", "solo", "--previous")
-	if code != 1 || out != "" || !strings.Contains(errOut, "drop --previous") || strings.Contains(errOut, "pw@") {
+	if code != 1 || strings.Contains(out, "pw@") {
 		t.Errorf("exit %d stdout=%q stderr=%s", code, out, errOut)
 	}
+	requireStdoutError(t, out, errOut, "drop --previous")
 }
 
 func TestLogsStatesEmptyOutput(t *testing.T) {
@@ -406,11 +411,15 @@ func TestLogsUsageErrors(t *testing.T) {
 		{"logs"}, {"logs", "solo", "-l", "app=x"}, {"logs", "configmap/cfg"}, {"logs", "frobnicators/x"},
 		{"logs", "solo", "--tail", "-1"}, {"logs", "solo", "--tail", "20000"}, {"logs", "solo", "--max-bytes", "10"}, {"logs", "a/b/c"},
 	} {
-		if code, _, _ := run(t, c, args...); code != 2 {
+		if code, out, errOut := run(t, c, args...); code != 2 {
 			t.Errorf("%v: exit %d, want 2", args, code)
+		} else {
+			requireStdoutError(t, out, errOut)
 		}
 	}
-	if code, _, _ := run(t, c, "logs", "missing-pod"); code != 1 {
+	if code, out, errOut := run(t, c, "logs", "missing-pod"); code != 1 {
 		t.Errorf("missing pod: exit %d, want 1", code)
+	} else {
+		requireStdoutError(t, out, errOut)
 	}
 }

@@ -104,8 +104,7 @@ func run(t *testing.T, c *Clients, args ...string) (code int, stdout, stderr str
 	root, out, errb := testRoot(t, c, nil)
 	root.SetArgs(args)
 	code = cli.Execute(root)
-	stdout, stderr = splitErr(out.String(), errb.String())
-	return code, stdout, stderr
+	return code, out.String(), errb.String()
 }
 
 func runJSON(t *testing.T, c *Clients, args ...string) map[string]any {
@@ -231,9 +230,10 @@ func TestGetOneByName(t *testing.T) {
 		}
 	}
 	code, out, errOut := run(t, c, "get", "pod", "missing")
-	if code != 1 || out != "" || !strings.Contains(errOut, "not found") || !strings.Contains(errOut, "hint") {
+	if code != 1 {
 		t.Errorf("missing: exit %d stdout=%q stderr=%s", code, out, errOut)
 	}
+	requireStdoutError(t, out, errOut, "not found", "hint")
 }
 
 func TestGetClusterScopedNameIgnoresAllNamespaces(t *testing.T) {
@@ -246,11 +246,15 @@ func TestGetClusterScopedNameIgnoresAllNamespaces(t *testing.T) {
 	if m["count"] != float64(1) || items(m)[0]["name"] != "n1" || m["namespace"] != nil {
 		t.Errorf("node read with -n and -A: %v", m)
 	}
-	if code, _, _ := run(t, c, "get", "pod", "a", "-A"); code != 2 {
+	if code, out, errOut := run(t, c, "get", "pod", "a", "-A"); code != 2 {
 		t.Errorf("namespaced object with -A exit %d, want 2", code)
+	} else {
+		requireStdoutError(t, out, errOut)
 	}
-	if code, _, _ := run(t, c, "get", "pods", "-n", "x", "-A"); code != 2 {
+	if code, out, errOut := run(t, c, "get", "pods", "-n", "x", "-A"); code != 2 {
 		t.Errorf("namespaced list with -n and -A exit %d, want 2", code)
+	} else {
+		requireStdoutError(t, out, errOut)
 	}
 }
 
@@ -359,8 +363,10 @@ func TestGetUsageErrors(t *testing.T) {
 	for _, args := range [][]string{
 		{"get"}, {"get", "frobnicators"}, {"get", "pods", "-n", "x", "-A"}, {"get", "pod", "a", "-l", "app=x"}, {"get", "a", "b", "c"},
 	} {
-		if code, _, _ := run(t, c, args...); code != 2 {
+		if code, out, errOut := run(t, c, args...); code != 2 {
 			t.Errorf("%v: exit %d, want 2", args, code)
+		} else {
+			requireStdoutError(t, out, errOut)
 		}
 	}
 }

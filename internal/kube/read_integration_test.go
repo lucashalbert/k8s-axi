@@ -348,8 +348,10 @@ func TestReadCoreWorkloadOwnersEventsAndLogs(t *testing.T) {
 	if l := itJSON(t, "logs", "-l", "app=web", "-c", "app", "--since", "1m", "-n", ns); l["pods"] != float64(1) {
 		t.Errorf("logs -l: %v", l)
 	}
-	if code, _, errOut := realRoot("logs", pod, "--previous", "-n", ns); code != 1 || !strings.Contains(errOut, "drop --previous") {
+	if code, out, errOut := realRoot("logs", pod, "--previous", "-n", ns); code != 1 {
 		t.Errorf("--previous without a previous instance: exit %d: %s", code, errOut)
+	} else {
+		requireStdoutError(t, out, errOut, "drop --previous")
 	}
 }
 
@@ -396,10 +398,11 @@ func TestReadCoreForbiddenIsAStructuredError(t *testing.T) {
 
 	for _, args := range [][]string{{"get", "pods"}, {"inspect", "pod", "x"}, {"events"}, {"logs", "x"}} {
 		code, out, errOut := realRoot(append(args, "--kubeconfig", path)...)
-		if code != 1 || out != "" || !strings.Contains(errOut, "RBAC denied") {
+		if code != 1 {
 			t.Errorf("%v: exit %d stdout=%q stderr=%s", args, code, out, errOut)
 		}
-		if strings.Contains(errOut, token) {
+		requireStdoutError(t, out, errOut, "RBAC denied")
+		if strings.Contains(out, token) {
 			t.Errorf("%v leaked the token", args)
 		}
 	}

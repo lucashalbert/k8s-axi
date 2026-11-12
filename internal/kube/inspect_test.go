@@ -278,12 +278,15 @@ func TestInspectNextSteps(t *testing.T) {
 func TestInspectMissingObjectAndUsage(t *testing.T) {
 	c := inspectFixture(t)
 	code, out, errOut := run(t, c, "inspect", "pod", "nope")
-	if code != 1 || out != "" || !strings.Contains(errOut, "not found") {
+	if code != 1 {
 		t.Errorf("missing: exit %d stdout=%q stderr=%s", code, out, errOut)
 	}
+	requireStdoutError(t, out, errOut, "not found")
 	for _, args := range [][]string{{"inspect"}, {"inspect", "pods"}, {"inspect", "frobnicators", "x"}} {
-		if code, _, _ := run(t, c, args...); code != 2 {
+		if code, out, errOut := run(t, c, args...); code != 2 {
 			t.Errorf("%v: exit %d, want 2", args, code)
+		} else {
+			requireStdoutError(t, out, errOut)
 		}
 	}
 }

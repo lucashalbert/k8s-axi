@@ -27,8 +27,7 @@ func realRoot(args ...string) (code int, stdout, stderr string) {
 	root.SetErr(&errb)
 	root.SetArgs(args)
 	code = cli.Execute(root)
-	stdout, stderr = splitErr(out.String(), errb.String())
-	return code, stdout, stderr
+	return code, out.String(), errb.String()
 }
 
 func decode(t *testing.T, s string) map[string]any {
@@ -201,9 +200,10 @@ users:
 	}
 	start := time.Now()
 	code, out, errOut := realRoot("cluster", "info", "--kubeconfig", kc, "--timeout", "2s")
-	if code != 1 || out != "" || !strings.Contains(errOut, "dead") {
+	if code != 1 {
 		t.Fatalf("exit %d stdout=%q stderr=%s", code, out, errOut)
 	}
+	requireStdoutError(t, out, errOut, "dead")
 	if d := time.Since(start); d > 10*time.Second {
 		t.Errorf("not bounded by --timeout: %v", d)
 	}
