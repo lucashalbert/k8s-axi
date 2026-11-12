@@ -94,3 +94,17 @@ func TestSmokeEveryCommandAgainstKind(t *testing.T) {
 		t.Errorf("smoke ran %v, want every command %v", got, want)
 	}
 }
+
+// TestHomeViewAgainstKind runs k8s-axi with no arguments, which is not a
+// subcommand and so not in smokePaths: it must print live cluster data.
+func TestHomeViewAgainstKind(t *testing.T) {
+	c, _ := itSetup(t)
+	code, out, errOut := realRoot("--json")
+	if code != 0 {
+		t.Fatalf("exit %d: %s", code, errOut)
+	}
+	got := decode(t, out)
+	if got["state"] != "ready" || got["reachable"] != true || got["context"] != c.Context || got["version"] == "" {
+		t.Errorf("home: %v", got)
+	}
+}

@@ -36,12 +36,21 @@ func (g *globals) clusterInfo(cmd *cobra.Command) error {
 	if err != nil {
 		return err
 	}
-	v, err := c.Discovery.ServerVersion()
+	v, err := serverVersion(c)
 	if err != nil {
-		return axierr.Runtime("cluster info", "context/"+c.Context+" ("+c.Server+")", redactedError(err),
+		return axierr.Runtime("cluster info", "context/"+c.Context+" ("+c.Server+")", err,
 			"check that the API server is reachable and the credentials are valid, or raise --timeout ("+g.timeout.String()+")")
 	}
 	return output.Render(cmd.OutOrStdout(), clusterInfoOut{
-		Context: c.Context, Server: c.Server, Version: v.GitVersion, Namespace: c.Namespace, Reachable: true,
+		Context: c.Context, Server: c.Server, Version: v, Namespace: c.Namespace, Reachable: true,
 	}, f)
+}
+
+// serverVersion asks the API server for its version. The error is redacted.
+func serverVersion(c *Clients) (string, error) {
+	v, err := c.Discovery.ServerVersion()
+	if err != nil {
+		return "", redactedError(err)
+	}
+	return v.GitVersion, nil
 }

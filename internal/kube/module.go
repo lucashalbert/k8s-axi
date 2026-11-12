@@ -64,6 +64,8 @@ func (m Module) Register(root *cobra.Command) {
 	pf.IntVar(&g.limit, "limit", defaultLimit, "maximum number of rows to print; 0 means no limit")
 	pf.DurationVar(&g.timeout, "timeout", defaultTimeout, "timeout for requests to the API server")
 
+	root.Args = cobra.NoArgs
+	root.RunE = func(cmd *cobra.Command, _ []string) error { return g.home(cmd) }
 	root.PersistentPreRunE = func(cmd *cobra.Command, _ []string) error {
 		return bindEnv(cmd.Root().PersistentFlags())
 	}

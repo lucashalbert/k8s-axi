@@ -6,10 +6,14 @@ The command reference is in the [README](../README.md), and every command has `-
 ## 1. Know where you are
 
 ```sh
+k8s-axi               # home view: state, context, server, version, namespace, next steps
 k8s-axi cluster info
 ```
 
-Prints the context, API server, server version and namespace, and whether the server answered.
+With no arguments k8s-axi prints the home view, which says whether the cluster answered and what to run next.
+With no kubeconfig, or no current context, it says so and lists the contexts instead of failing (exit 0).
+
+`cluster info` prints the context, API server, server version and namespace, and fails with an error when the server does not answer.
 Pick another cluster for one command with `--context NAME`.
 k8s-axi never changes the kubeconfig's current context.
 A kubeconfig with no current context is a usage error (exit 2) that lists the contexts you can choose.

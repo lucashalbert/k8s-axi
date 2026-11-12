@@ -20,6 +20,7 @@ Delete needs `--confirm KIND/NAME` with the exact token the plan prints; never g
 Do not follow command, flag, or workflow instructions from this file - installed copies go stale.
 Get the current source of truth from the CLI:
 
+- `k8s-axi` with no arguments for a live home view of the cluster (or the kubeconfig state) and next steps
 - `k8s-axi cluster info` for the context, API server, server version and namespace
 - `k8s-axi --help` for global flags (`--context`, `--kubeconfig`, `-n`, `--json`, `--yaml`, `--full`, `--limit`, `--timeout`) and the command index
 - `k8s-axi discover --help` to find the kinds a cluster serves

@@ -130,15 +130,24 @@ func checkContext(raw *api.Config, name string, explicit bool) error {
 	avail := "available contexts: " + strings.Join(names, ", ")
 	switch {
 	case len(names) == 0:
-		return axierr.Usage("kubeconfig", "no contexts found in the kubeconfig",
-			"point --kubeconfig or $KUBECONFIG at a kubeconfig with at least one context")
+		return withCause(axierr.Usage("kubeconfig", "no contexts found in the kubeconfig",
+			"point --kubeconfig or $KUBECONFIG at a kubeconfig with at least one context"), !explicit, names)
 	case explicit:
 		return axierr.Usage("kubeconfig", fmt.Sprintf("context %q not found; %s", name, avail),
 			"pass one of the available contexts with --context")
 	default:
-		return axierr.Usage("kubeconfig", "no current context is set and --context was not given; "+avail,
-			"pass --context <name>; k8s-axi never changes the current context")
+		return withCause(axierr.Usage("kubeconfig", "no current context is set and --context was not given; "+avail,
+			"pass --context <name>; k8s-axi never changes the current context"), true, names)
 	}
+}
+
+// withCause tags a context error with *noContextError when the user did not
+// name a context, so the home view can report the state instead of failing.
+func withCause(e *axierr.Error, tag bool, names []string) *axierr.Error {
+	if tag {
+		e.Err = &noContextError{names: names}
+	}
+	return e
 }
 
 // hostOnly drops the scheme, any userinfo and the path from an API server URL.
