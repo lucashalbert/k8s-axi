@@ -5,7 +5,6 @@ package kube
 import (
 	"context"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"slices"
@@ -61,49 +60,11 @@ func eventually(t *testing.T, what string, within time.Duration, ok func() bool)
 	}
 }
 
-func waitForPodLogLine(t *testing.T, c *Clients, ns, pod, container string, previous bool, within time.Duration, want string) {
-	t.Helper()
-	eventually(t, "pod log line "+want, within, func() bool {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		rc, err := c.Typed.CoreV1().Pods(ns).GetLogs(pod, &corev1.PodLogOptions{
-			Container: container,
-			Previous:  previous,
-			TailLines: ptr.To(int64(20)),
-		}).Stream(ctx)
-		if err != nil {
-			return false
-		}
-		defer func() { _ = rc.Close() }()
-		raw, err := io.ReadAll(rc)
-		return err == nil && strings.Contains(string(raw), want)
-	})
-}
-
-func waitForRestartedPod(t *testing.T, c *Clients, ns, pod, container string, within time.Duration, previousLog string) {
+func waitForRestartedPod(t *testing.T, ns, pod string, within time.Duration) {
 	t.Helper()
 	eventually(t, "pod "+pod+" to have restarted after a crash", within, func() bool {
-		m := itTry("get", "pods", pod, "-n", ns)
-		if m == nil {
-			return false
-		}
-		rows := rowsOf(m, "items")
-		if len(rows) != 1 || rows[0]["restarts"].(float64) < 1 {
-			return false
-		}
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		rc, err := c.Typed.CoreV1().Pods(ns).GetLogs(pod, &corev1.PodLogOptions{
-			Container: container,
-			Previous:  true,
-			TailLines: ptr.To(int64(20)),
-		}).Stream(ctx)
-		if err != nil {
-			return false
-		}
-		defer func() { _ = rc.Close() }()
-		raw, err := io.ReadAll(rc)
-		return err == nil && strings.Contains(string(raw), previousLog)
+		rows := rowsOf(itTry("get", "pods", pod, "-n", ns), "items")
+		return len(rows) == 1 && rows[0]["restarts"].(float64) >= 1
 	})
 }
 
@@ -371,20 +332,21 @@ func TestReadCoreWorkloadOwnersEventsAndLogs(t *testing.T) {
 func TestReadCoreLogsPreviousOfARestartedContainer(t *testing.T) {
 	c, ns := itSetup(t)
 	pod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "crasher", Namespace: ns}, Spec: corev1.PodSpec{Containers: []corev1.Container{{
-		Name: "app", Image: busybox, Command: []string{"sh", "-c", "echo first-run-line; sleep 1; exit 1"}}}}}
+		Name: "app", Image: busybox, Command: []string{"sh", "-c", "echo first-run-line; sleep 20; exit 1"}}}}}
 	if _, err := c.Typed.CoreV1().Pods(ns).Create(context.Background(), pod, metav1.CreateOptions{}); err != nil {
 		t.Fatal(err)
 	}
-	waitForRestartedPod(t, c, ns, "crasher", "app", 180*time.Second, "first-run-line")
-	waitForPodLogLine(t, c, ns, "crasher", "app", true, 60*time.Second, "first-run-line")
-	var lines []string
-	m := itJSON(t, "logs", "crasher", "--previous", "-n", ns)
-	for _, l := range rowsOf(rowsOf(m, "streams")[0], "log") {
-		lines = append(lines, l["line"].(string))
-	}
-	if len(lines) == 0 || lines[0] != "first-run-line" {
-		t.Errorf("previous logs = %v", lines)
-	}
+	waitForRestartedPod(t, ns, "crasher", 180*time.Second)
+	// The kubelet serves --previous only while the restarted container runs
+	// or backs off, so the long sleep keeps that window open.
+	eventually(t, "the previous log of the restarted container", 60*time.Second, func() bool {
+		streams := rowsOf(itTry("logs", "crasher", "--previous", "-n", ns), "streams")
+		if len(streams) != 1 {
+			return false
+		}
+		lines := rowsOf(streams[0], "log")
+		return len(lines) > 0 && lines[0]["line"] == "first-run-line"
+	})
 }
 
 func TestReadCoreForbiddenIsAStructuredError(t *testing.T) {

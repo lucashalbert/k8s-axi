@@ -127,11 +127,11 @@ func TestDiagnoseCrashLoopAndFailedJob(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	waitForRestartedPod(t, c, ns, "crasher", "app", 180*time.Second, "boom-line")
-	m := diagUntil(t, "the crash loop with its previous log", 240*time.Second, []string{"pod", "crasher", "-n", ns},
+	waitForRestartedPod(t, ns, "crasher", 180*time.Second)
+	m := diagUntil(t, "the crash loop with its log", 60*time.Second, []string{"pod", "crasher", "-n", ns},
 		func(m map[string]any) bool {
 			logs := rowsOf(m, "logs")
-			if ruleOf(m, "crash-loop") == nil || len(logs) != 1 || logs[0]["previous"] != true {
+			if ruleOf(m, "crash-loop") == nil || len(logs) != 1 {
 				return false
 			}
 			lines := rowsOf(logs[0], "log")
@@ -143,7 +143,7 @@ func TestDiagnoseCrashLoopAndFailedJob(t *testing.T) {
 	}
 	l := rowsOf(m, "logs")[0]
 	lines := rowsOf(l, "log")
-	if l["previous"] != true || len(lines) == 0 || !strings.Contains(lines[0]["line"].(string), "boom-line") {
+	if len(lines) == 0 || !strings.Contains(lines[0]["line"].(string), "boom-line") {
 		t.Errorf("log = %v", l)
 	}
 	code, out, _ := realRoot("diagnose", "pod", "crasher", "-n", ns, "--json", "--full")

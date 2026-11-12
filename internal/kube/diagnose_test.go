@@ -293,11 +293,30 @@ func TestDiagnoseLogSelectionUsesPreviousForRestartedFailure(t *testing.T) {
 		wantPrevious bool
 	}{
 		{
-			name: "restarted current termination",
+			name: "restarted current termination", // lastState is an older, removed instance
 			status: map[string]any{
 				"name":         "app",
 				"restartCount": int64(2),
 				"state":        map[string]any{"terminated": map[string]any{"exitCode": int64(3)}},
+				"lastState":    map[string]any{"terminated": map[string]any{"exitCode": int64(3)}},
+			},
+		},
+		{
+			name: "restarted back-off",
+			status: map[string]any{
+				"name":         "app",
+				"restartCount": int64(2),
+				"state":        map[string]any{"waiting": map[string]any{"reason": "CrashLoopBackOff"}},
+				"lastState":    map[string]any{"terminated": map[string]any{"exitCode": int64(3)}},
+			},
+			wantPrevious: true,
+		},
+		{
+			name: "restarted and running",
+			status: map[string]any{
+				"name":         "app",
+				"restartCount": int64(2),
+				"state":        map[string]any{"running": map[string]any{}},
 				"lastState":    map[string]any{"terminated": map[string]any{"exitCode": int64(3)}},
 			},
 			wantPrevious: true,

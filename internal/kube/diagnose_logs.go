@@ -58,12 +58,14 @@ func logSelFor(pod string, cs map[string]any) (logSel, bool) {
 	name := str(cs, "name")
 	cur, last := dict(cs, "state", "terminated"), dict(cs, "lastState", "terminated")
 	running := dict(cs, "state", "running") != nil
+	// A terminated state is the latest instance, read without --previous;
+	// lastState is then an older one the kubelet has already removed.
 	switch {
-	case str(dict(cs, "state", "waiting"), "reason") == "CrashLoopBackOff", last != nil && num(last, "exitCode") != 0 && num(cs, "restartCount") > 0 && !running:
+	case str(dict(cs, "state", "waiting"), "reason") == "CrashLoopBackOff", cur == nil && last != nil && num(last, "exitCode") != 0 && num(cs, "restartCount") > 0 && !running:
 		return logSel{pod, name, true, 0}, true
 	case cur != nil && num(cur, "exitCode") != 0:
 		return logSel{pod, name, false, 0}, true
-	case last != nil && num(last, "exitCode") != 0 && num(cs, "restartCount") > 0:
+	case cur == nil && last != nil && num(last, "exitCode") != 0 && num(cs, "restartCount") > 0:
 		return logSel{pod, name, true, 1}, true
 	case running && cs["ready"] == false:
 		return logSel{pod, name, false, 2}, true
