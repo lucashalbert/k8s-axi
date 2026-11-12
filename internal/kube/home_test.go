@@ -50,7 +50,7 @@ func TestHomeReady(t *testing.T) {
 func TestHomeTOONAndYAML(t *testing.T) {
 	c, _ := fakeClients()
 	root, out, _ := testRoot(t, c, nil)
-	root.SetArgs(nil)
+	root.SetArgs([]string{})
 	if code := cli.Execute(root); code != 0 || !strings.Contains(out.String(), "state: ready") || !strings.Contains(out.String(), "next[") {
 		t.Errorf("toon exit %d:\n%s", code, out)
 	}
