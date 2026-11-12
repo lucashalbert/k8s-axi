@@ -27,7 +27,8 @@ func realRoot(args ...string) (code int, stdout, stderr string) {
 	root.SetErr(&errb)
 	root.SetArgs(args)
 	code = cli.Execute(root)
-	return code, out.String(), errb.String()
+	stdout, stderr = splitErr(out.String(), errb.String())
+	return code, stdout, stderr
 }
 
 func decode(t *testing.T, s string) map[string]any {

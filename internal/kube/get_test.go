@@ -104,7 +104,8 @@ func run(t *testing.T, c *Clients, args ...string) (code int, stdout, stderr str
 	root, out, errb := testRoot(t, c, nil)
 	root.SetArgs(args)
 	code = cli.Execute(root)
-	return code, out.String(), errb.String()
+	stdout, stderr = splitErr(out.String(), errb.String())
+	return code, stdout, stderr
 }
 
 func runJSON(t *testing.T, c *Clients, args ...string) map[string]any {

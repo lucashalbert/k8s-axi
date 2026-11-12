@@ -470,10 +470,10 @@ func TestApplyNeverEchoesSecretValues(t *testing.T) {
 }
 
 func TestApplyErrorForUnreachableClients(t *testing.T) {
-	root, _, errb := testRoot(t, nil, errors.New("no kubeconfig"))
+	root, out, errb := testRoot(t, nil, errors.New("no kubeconfig"))
 	root.SetArgs([]string{"apply", "-f", manifest(t, cfgYAML), "-n", "default"})
-	if code := cli.Execute(root); code != 1 || !strings.Contains(errb.String(), "no kubeconfig") {
-		t.Errorf("stderr = %s", errb)
+	if code := cli.Execute(root); code != 1 || !strings.Contains(out.String()+errb.String(), "no kubeconfig") {
+		t.Errorf("output = %s", out)
 	}
 }
 

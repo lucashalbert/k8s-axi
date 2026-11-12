@@ -71,11 +71,12 @@ They never contain credentials or Secret values.
 ## 6. Keep it current
 
 ```sh
-k8s-axi version
+k8s-axi version   # also --version, -v and -V print just the version
 k8s-axi update       # downloads the latest release and verifies its SHA-256 checksum
 ```
 
 A cached once-a-day update check prints a one-line notice on stderr.
+Structured errors (`op`, `message`, `hint`, `exit`) go to stdout in the same format as normal output; the exit code is unchanged.
 It never delays or fails a command, and `K8S_AXI_NO_UPDATE_CHECK=1` turns it off.
 A failed or interrupted `update` leaves the installed binary untouched.
 
