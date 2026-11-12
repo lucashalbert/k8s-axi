@@ -31,7 +31,7 @@ The kind matrix first runs one smoke test per command against every minor (`Test
 `TestSmokeListCoversEveryCommand` fails when a command exists that the smoke list does not name, so a new command cannot skip the matrix.
 The deeper tests then run `get`, `inspect`, `events`, `logs` and `diagnose` against every minor, including a CRD served in a non-preferred version, a Secret whose value must never appear in any output format, credential redaction in logs, `--previous` logs of a restarted container, and the structured error for a service account without permissions.
 
-`diagnose` is exercised against a pod that cannot pull its image, an unschedulable pod, a crash loop with its previous log, a failed Job, a failing readiness probe, services with a selector typo and with no ready endpoints, a Deployment over a ResourceQuota, and healthy workloads of every supported kind.
+`diagnose` is exercised against a pod that cannot pull its image, an unschedulable pod, a crash loop with its log, a failed Job, a failing readiness probe, services with a selector typo and with no ready endpoints, a Deployment over a ResourceQuota, and healthy workloads of every supported kind.
 Its rules read documented status fields and conditions, plus the wording of a few scheduler, kubelet and controller messages, so a change in that wording only costs an inferred cause finding and never the observed finding next to it.
 It also uses stable surfaces only: get for the target and owner chain, list and get for pods, replica sets, nodes, resource quotas, endpoint slices and events, and pod logs.
 

@@ -16,9 +16,9 @@ type logSel struct {
 }
 
 // logCandidates picks the container logs worth reading: containers that
-// crash or exit with an error (their previous instance when restarted) and
-// containers that run without becoming ready. One pod per container name and
-// instance, at most max in total.
+// crash or exit with an error, choosing --previous only when Kubernetes still
+// exposes that restarted instance, and containers that run without becoming
+// ready. One pod per container name and instance, at most max in total.
 func logCandidates(s *snapshot, max int) []logSel {
 	var all []logSel
 	for i := range s.Pods {
