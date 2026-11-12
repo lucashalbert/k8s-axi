@@ -64,11 +64,11 @@ func (g *globals) homeView() (homeOut, error) {
 	v, err := serverVersion(c)
 	if err != nil {
 		out.State, out.Error = stateUnreachable, redact.Mask(redactedError(err).Error())
-		out.Next = g.hints("k8s-axi cluster info --timeout 60s", "k8s-axi --help")
+		out.Next = g.hints(commandHint("cluster", "info", "--timeout", "60s"), commandHint("--help"))
 		return out, nil
 	}
 	out.State, out.Version, out.Reachable = stateReady, v, true
-	out.Next = g.hints("k8s-axi get pods", "k8s-axi events --type Warning", "k8s-axi diagnose deploy/NAME", "k8s-axi --help")
+	out.Next = g.hints(commandHint("get", "pods"), commandHint("events", "--type", "Warning"), commandHint("diagnose", "deploy/NAME"), commandHint("--help"))
 	return out, nil
 }
 
@@ -87,21 +87,32 @@ func (g *globals) configHome(nc *noContextError) homeOut {
 		out.ContextsOmitted, names = len(names)-g.limit, names[:g.limit]
 	}
 	out.Contexts = names
-	out.Next = []string{"k8s-axi --context " + names[0], "k8s-axi --help"}
+	out.Next = []string{g.scopedHint(commandHint("--context", names[0])), commandHint("--help")}
 	return out
 }
 
-// hints returns the commands with the --context flag the view was resolved
-// with, so each one targets the cluster the view describes.
 func (g *globals) hints(cmds ...string) []string {
 	out := make([]string, len(cmds))
 	for i, c := range cmds {
 		out[i] = c
-		if g.context != "" && c != "k8s-axi --help" {
-			out[i] = c + " --context " + g.context
+		if c != "k8s-axi --help" {
+			out[i] = g.scopedHint(c)
 		}
 	}
 	return out
+}
+
+func (g *globals) scopedHint(cmd string) string {
+	if g.context != "" {
+		cmd += " --context " + shellArg(g.context)
+	}
+	if g.kubeconfig != "" {
+		cmd += " --kubeconfig " + shellArg(g.kubeconfig)
+	}
+	if g.namespace != "" {
+		cmd += " -n " + shellArg(g.namespace)
+	}
+	return cmd
 }
 
 // noContextError marks a Load failure where the kubeconfig has no context to

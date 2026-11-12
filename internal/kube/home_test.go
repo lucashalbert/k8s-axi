@@ -83,11 +83,11 @@ func TestHomeUnreachableIsStateWithExit0(t *testing.T) {
 func TestHomeHintsCarryContextFlag(t *testing.T) {
 	c, _ := fakeClients()
 	root, out, _ := testRoot(t, c, nil)
-	root.SetArgs([]string{"--json", "--context", "other"})
+	root.SetArgs([]string{"--json", "--context", "prod east", "--kubeconfig", "/tmp/kube cfg", "-n", "team one"})
 	cli.Execute(root)
 	for _, h := range homeJSON(t, out)["next"].([]any) {
-		if h != "k8s-axi --help" && !strings.HasSuffix(h.(string), " --context other") {
-			t.Errorf("hint %q lacks --context", h)
+		if h != "k8s-axi --help" && !strings.HasSuffix(h.(string), " --context 'prod east' --kubeconfig '/tmp/kube cfg' -n 'team one'") {
+			t.Errorf("hint %q lacks explicit scope", h)
 		}
 	}
 }
@@ -168,6 +168,34 @@ func TestHomeNoCurrentContextListsContextsAndNeverSwitches(t *testing.T) {
 	}
 	if b, _ := os.ReadFile(os.Getenv("KUBECONFIG")); string(b) != noCurrentKubeconfig {
 		t.Error("kubeconfig was modified")
+	}
+}
+
+func TestHomeNoCurrentContextHintCarriesExplicitKubeconfig(t *testing.T) {
+	t.Setenv("K8S_AXI_NO_UPDATE_CHECK", "1")
+	t.Setenv("HOME", t.TempDir())
+	dir := t.TempDir()
+	path := filepath.Join(dir, "kube cfg")
+	yaml := strings.Replace(noCurrentKubeconfig, "name: alpha", "name: prod east", 1)
+	if err := os.WriteFile(path, []byte(yaml), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	root := cli.New("k8s-axi", update.Info{Version: "0.0.1"}, cli.EnvPrefix("K8S_AXI_"), Module{})
+	var out, errOut bytes.Buffer
+	root.SetOut(&out)
+	root.SetErr(&errOut)
+	root.SetArgs([]string{"--json", "--kubeconfig", path, "--limit", "1"})
+	if code := cli.Execute(root); code != 0 || errOut.Len() != 0 {
+		t.Fatalf("exit %d: %s", code, &errOut)
+	}
+	var got map[string]any
+	if err := json.Unmarshal(out.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	next := got["next"].([]any)
+	want := "k8s-axi --context 'prod east' --kubeconfig '" + path + "'"
+	if next[0] != want {
+		t.Errorf("next = %v, want first hint %q", next, want)
 	}
 }
 
