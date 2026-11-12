@@ -66,6 +66,7 @@ A namespaced change without `-n` or a namespace on the context is refused.
 | 2 | Usage error: unknown flag, missing `-n`, wrong `--confirm`, no current context | Fix the command; nothing was sent |
 
 Errors are short and structured: the operation, the target, a message and a hint.
+Structured errors (`op`, `message`, `hint`, `exit`) go to stdout in the same format as normal output; the exit code is unchanged.
 They never contain credentials or Secret values.
 
 ## 6. Keep it current
@@ -76,7 +77,6 @@ k8s-axi update       # downloads the latest release and verifies its SHA-256 che
 ```
 
 A cached once-a-day update check prints a one-line notice on stderr.
-Structured errors (`op`, `message`, `hint`, `exit`) go to stdout in the same format as normal output; the exit code is unchanged.
 It never delays or fails a command, and `K8S_AXI_NO_UPDATE_CHECK=1` turns it off.
 A failed or interrupted `update` leaves the installed binary untouched.
 
