@@ -70,12 +70,13 @@ A namespaced change without `-n` or a namespace on the context is refused.
 | 2 | Usage error: unknown flag, missing `-n`, wrong `--confirm`, no current context for a cluster command | Fix the command; nothing was sent |
 
 Errors are short and structured: the operation, the target, a message and a hint.
+Structured errors (`op`, `message`, `hint`, `exit`) go to stdout in the same format as normal output; the exit code is unchanged.
 They never contain credentials or Secret values.
 
 ## 6. Keep it current
 
 ```sh
-k8s-axi version
+k8s-axi version   # also --version, -v and -V print just the version
 k8s-axi update       # downloads the latest release and verifies its SHA-256 checksum
 ```
 

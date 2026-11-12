@@ -156,12 +156,10 @@ func TestScaleUsageErrors(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			e := scaleEnv(t)
 			code, out, errOut := run(t, e.c, args...)
-			if code != 2 || out != "" {
+			if code != 2 {
 				t.Fatalf("exit %d, stdout %q, stderr %s", code, out, errOut)
 			}
-			if !strings.Contains(errOut, "hint") {
-				t.Errorf("no hint: %s", errOut)
-			}
+			requireStdoutError(t, out, errOut, "hint")
 			for _, a := range e.dyn.Actions() {
 				if a.GetVerb() == "update" || a.GetVerb() == "patch" {
 					t.Errorf("usage error still sent %v", a)
@@ -196,9 +194,11 @@ func TestScaleAPIErrors(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			e := scaleEnv(t)
 			e.failOn[tc.verb+" deployments"] = tc.err
-			code, _, errOut := run(t, e.c, "scale", "deploy/web", "--replicas", "5", "-n", "default")
-			if code != 1 || !strings.Contains(errOut, tc.want) {
+			code, out, errOut := run(t, e.c, "scale", "deploy/web", "--replicas", "5", "-n", "default")
+			if code != 1 {
 				t.Errorf("exit %d, want hint %q: %s", code, tc.want, errOut)
+			} else {
+				requireStdoutError(t, out, errOut, tc.want)
 			}
 		})
 	}
@@ -226,9 +226,10 @@ func TestScaleResolveDiscoveryRespectsCommandTimeout(t *testing.T) {
 	start := time.Now()
 	code, out, errOut := run(t, e.c, "scale", "deploy/web", "--replicas", "5", "-n", "default", "--timeout", "20ms")
 	elapsed := time.Since(start)
-	if code != 1 || out != "" || !strings.Contains(errOut, "raise --timeout") {
+	if code != 1 {
 		t.Fatalf("exit %d, stdout %q, stderr %s", code, out, errOut)
 	}
+	requireStdoutError(t, out, errOut, "raise --timeout")
 	if elapsed >= 250*time.Millisecond {
 		t.Fatalf("timeout took %v, want less than stalled discovery", elapsed)
 	}
@@ -241,9 +242,10 @@ func TestScaleSubresourceDiscoveryRespectsCommandTimeout(t *testing.T) {
 	start := time.Now()
 	code, out, errOut := run(t, e.c, "scale", "deploy/web", "--replicas", "5", "-n", "default", "--timeout", "20ms")
 	elapsed := time.Since(start)
-	if code != 1 || out != "" || !strings.Contains(errOut, "raise --timeout") {
+	if code != 1 {
 		t.Fatalf("exit %d, stdout %q, stderr %s", code, out, errOut)
 	}
+	requireStdoutError(t, out, errOut, "raise --timeout")
 	if elapsed >= 250*time.Millisecond {
 		t.Fatalf("timeout took %v, want less than stalled discovery", elapsed)
 	}
@@ -262,9 +264,10 @@ func TestScaleResolveContextDeadlineIsRuntimeTimeout(t *testing.T) {
 			e := scaleEnv(t)
 			e.c.Mapper = tc.m
 			code, out, errOut := run(t, e.c, "scale", "deploy/web", "--replicas", "5", "-n", "default")
-			if code != 1 || out != "" || !strings.Contains(errOut, "raise --timeout") || strings.Contains(errOut, "ambiguous") {
+			if code != 1 || strings.Contains(out, "ambiguous") {
 				t.Fatalf("exit %d, stdout %q, stderr %s", code, out, errOut)
 			}
+			requireStdoutError(t, out, errOut, "raise --timeout")
 		})
 	}
 }
@@ -367,10 +370,11 @@ func TestScaleStopsWhenReplicasChangedMeanwhile(t *testing.T) {
 	e := scaleEnv(t)
 	other := int64(8)
 	e.beforeUpdate = func() { e.touch(deployGVR, "default", "web", &other) }
-	code, _, errOut := run(t, e.c, "scale", "deploy/web", "--replicas", "5", "-n", "default", "--json")
-	if code != 1 || !strings.Contains(errOut, "re-run") {
+	code, out, errOut := run(t, e.c, "scale", "deploy/web", "--replicas", "5", "-n", "default", "--json")
+	if code != 1 {
 		t.Fatalf("exit %d: %s", code, errOut)
 	}
+	requireStdoutError(t, out, errOut, "re-run")
 	if got := e.replicas(deployGVR, "default", "web"); got != 8 {
 		t.Errorf("replicas = %d, want the other writer's 8", got)
 	}

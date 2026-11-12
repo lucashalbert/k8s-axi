@@ -135,11 +135,15 @@ func TestMutateScaleDeployment(t *testing.T) {
 	}
 
 	// No namespace on the context and no -n: refused before anything is sent.
-	if code, out, errOut := realRoot("scale", "deploy/web", "--replicas", "1", "--kubeconfig", kc, "--context", "real"); code != 2 || out != "" || !strings.Contains(errOut, "ambiguous") {
+	if code, out, errOut := realRoot("scale", "deploy/web", "--replicas", "1", "--kubeconfig", kc, "--context", "real"); code != 2 {
 		t.Errorf("no namespace: exit %d stdout=%q stderr=%s", code, out, errOut)
+	} else {
+		requireStdoutError(t, out, errOut, "ambiguous")
 	}
-	if code, _, _ := realRoot("scale", "deploy/web", "--replicas", "1", "-n", ns, "--dry-run=client", "--kubeconfig", kc, "--context", "real"); code != 2 {
+	if code, out, errOut := realRoot("scale", "deploy/web", "--replicas", "1", "-n", ns, "--dry-run=client", "--kubeconfig", kc, "--context", "real"); code != 2 {
 		t.Errorf("client dry-run exit %d, want 2", code)
+	} else {
+		requireStdoutError(t, out, errOut)
 	}
 
 	after, _ := os.ReadFile(kc)
@@ -200,8 +204,10 @@ func TestMutateScaleStatefulSetAndCustomResource(t *testing.T) {
 	}
 
 	// A kind without a scale subresource is a usage error.
-	if code, _, errOut := realRoot("scale", "configmaps/x", "--replicas", "1", "-n", ns, "--kubeconfig", kc, "--context", "real"); code != 2 || !strings.Contains(errOut, "no scale subresource") {
+	if code, out, errOut := realRoot("scale", "configmaps/x", "--replicas", "1", "-n", ns, "--kubeconfig", kc, "--context", "real"); code != 2 {
 		t.Errorf("configmap: exit %d: %s", code, errOut)
+	} else {
+		requireStdoutError(t, out, errOut, "no scale subresource")
 	}
 }
 
@@ -271,8 +277,10 @@ func TestMutateRolloutRestart(t *testing.T) {
 		t.Error("daemonset annotation missing")
 	}
 
-	if code, _, errOut := realRoot("rollout", "restart", "cm/x", "-n", ns, "--kubeconfig", kc, "--context", "real"); code != 2 || !strings.Contains(errOut, "supports deployments") {
+	if code, out, errOut := realRoot("rollout", "restart", "cm/x", "-n", ns, "--kubeconfig", kc, "--context", "real"); code != 2 {
 		t.Errorf("configmap: exit %d: %s", code, errOut)
+	} else {
+		requireStdoutError(t, out, errOut, "supports deployments")
 	}
 }
 
@@ -310,13 +318,15 @@ func TestMutateForbiddenIsAStructuredError(t *testing.T) {
 		// RBAC changes take a moment to reach the authorizer, and a get that is
 		// not yet allowed also fails with exit 1, so retry until the verb is named.
 		var errOut string
+		var out string
 		eventually(t, strings.Join(args, " ")+" to be denied for its verb", 60*time.Second, func() bool {
 			var code int
-			code, _, errOut = realRoot(append(args, "-n", ns, "--kubeconfig", kc, "--context", "real")...)
-			return code == 1 && (strings.Contains(errOut, "'update'") || strings.Contains(errOut, "'patch'"))
+			code, out, errOut = realRoot(append(args, "-n", ns, "--kubeconfig", kc, "--context", "real")...)
+			return code == 1 && (strings.Contains(out, "'update'") || strings.Contains(out, "'patch'"))
 		})
-		if !strings.Contains(errOut, "RBAC denied") || strings.Contains(errOut, token) {
-			t.Errorf("%v: stderr=%s", args, errOut)
+		requireStdoutError(t, out, errOut, "RBAC denied")
+		if strings.Contains(out, token) {
+			t.Errorf("%v: stdout=%s", args, out)
 		}
 	}
 	if got := itReplicas(t, c, ns, "web"); got != 1 {

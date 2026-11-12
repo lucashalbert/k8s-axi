@@ -127,8 +127,7 @@ func TestDiagnoseCrashLoopAndFailedJob(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	waitForRestartedPod(t, ns, "crasher", 180*time.Second)
-	waitForPodLogLine(t, c, ns, "crasher", "app", true, 180*time.Second, "boom-line")
+	waitForRestartedPod(t, c, ns, "crasher", "app", 180*time.Second, "boom-line")
 	m := diagUntil(t, "the crash loop with its previous log", 240*time.Second, []string{"pod", "crasher", "-n", ns},
 		func(m map[string]any) bool {
 			logs := rowsOf(m, "logs")

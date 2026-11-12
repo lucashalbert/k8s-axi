@@ -33,7 +33,7 @@ k8s-axi rollout restart sts/db -n prod               # deployments, statefulsets
 k8s-axi plan apply -f deploy.yaml -n prod            # what apply would create or change
 k8s-axi apply -f manifests/ -n prod                  # file, directory or - for stdin; server-side apply
 k8s-axi delete deploy/web -n prod --confirm deployment/web   # destructive: the exact token is required
-k8s-axi version
+k8s-axi version                       # also --version, -v and -V print just the version
 k8s-axi update                        # install the latest release, verifying its SHA-256 checksum
 ```
 

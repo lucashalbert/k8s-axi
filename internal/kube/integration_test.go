@@ -200,9 +200,10 @@ users:
 	}
 	start := time.Now()
 	code, out, errOut := realRoot("cluster", "info", "--kubeconfig", kc, "--timeout", "2s")
-	if code != 1 || out != "" || !strings.Contains(errOut, "dead") {
+	if code != 1 {
 		t.Fatalf("exit %d stdout=%q stderr=%s", code, out, errOut)
 	}
+	requireStdoutError(t, out, errOut, "dead")
 	if d := time.Since(start); d > 10*time.Second {
 		t.Errorf("not bounded by --timeout: %v", d)
 	}

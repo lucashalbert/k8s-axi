@@ -80,17 +80,30 @@ func waitForPodLogLine(t *testing.T, c *Clients, ns, pod, container string, prev
 	})
 }
 
-func waitForRestartedPod(t *testing.T, ns, pod string, within time.Duration) {
+func waitForRestartedPod(t *testing.T, c *Clients, ns, pod, container string, within time.Duration, previousLog string) {
 	t.Helper()
-	// Newer kubelets restart a crashing container sooner, so between restarts the
-	// status can read Error instead of CrashLoopBackOff on any given poll.
 	eventually(t, "pod "+pod+" to have restarted after a crash", within, func() bool {
 		m := itTry("get", "pods", pod, "-n", ns)
 		if m == nil {
 			return false
 		}
 		rows := rowsOf(m, "items")
-		return len(rows) == 1 && rows[0]["restarts"].(float64) >= 1 && (rows[0]["status"] == "CrashLoopBackOff" || rows[0]["status"] == "Error")
+		if len(rows) != 1 || rows[0]["restarts"].(float64) < 1 {
+			return false
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		rc, err := c.Typed.CoreV1().Pods(ns).GetLogs(pod, &corev1.PodLogOptions{
+			Container: container,
+			Previous:  true,
+			TailLines: ptr.To(int64(20)),
+		}).Stream(ctx)
+		if err != nil {
+			return false
+		}
+		defer func() { _ = rc.Close() }()
+		raw, err := io.ReadAll(rc)
+		return err == nil && strings.Contains(string(raw), previousLog)
 	})
 }
 
@@ -348,8 +361,10 @@ func TestReadCoreWorkloadOwnersEventsAndLogs(t *testing.T) {
 	if l := itJSON(t, "logs", "-l", "app=web", "-c", "app", "--since", "1m", "-n", ns); l["pods"] != float64(1) {
 		t.Errorf("logs -l: %v", l)
 	}
-	if code, _, errOut := realRoot("logs", pod, "--previous", "-n", ns); code != 1 || !strings.Contains(errOut, "drop --previous") {
+	if code, out, errOut := realRoot("logs", pod, "--previous", "-n", ns); code != 1 {
 		t.Errorf("--previous without a previous instance: exit %d: %s", code, errOut)
+	} else {
+		requireStdoutError(t, out, errOut, "drop --previous")
 	}
 }
 
@@ -360,7 +375,7 @@ func TestReadCoreLogsPreviousOfARestartedContainer(t *testing.T) {
 	if _, err := c.Typed.CoreV1().Pods(ns).Create(context.Background(), pod, metav1.CreateOptions{}); err != nil {
 		t.Fatal(err)
 	}
-	waitForRestartedPod(t, ns, "crasher", 180*time.Second)
+	waitForRestartedPod(t, c, ns, "crasher", "app", 180*time.Second, "first-run-line")
 	waitForPodLogLine(t, c, ns, "crasher", "app", true, 60*time.Second, "first-run-line")
 	var lines []string
 	m := itJSON(t, "logs", "crasher", "--previous", "-n", ns)
@@ -396,10 +411,11 @@ func TestReadCoreForbiddenIsAStructuredError(t *testing.T) {
 
 	for _, args := range [][]string{{"get", "pods"}, {"inspect", "pod", "x"}, {"events"}, {"logs", "x"}} {
 		code, out, errOut := realRoot(append(args, "--kubeconfig", path)...)
-		if code != 1 || out != "" || !strings.Contains(errOut, "RBAC denied") {
+		if code != 1 {
 			t.Errorf("%v: exit %d stdout=%q stderr=%s", args, code, out, errOut)
 		}
-		if strings.Contains(errOut, token) {
+		requireStdoutError(t, out, errOut, "RBAC denied")
+		if strings.Contains(out, token) {
 			t.Errorf("%v leaked the token", args)
 		}
 	}

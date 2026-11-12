@@ -225,11 +225,10 @@ func TestDiscoverRuntimeErrorRedactsURLUserinfo(t *testing.T) {
 	if code := cli.Execute(root); code != 1 {
 		t.Fatalf("exit %d, want 1", code)
 	}
-	if out.Len() != 0 {
-		t.Errorf("stdout should be empty: %s", out)
-	}
-	if strings.Contains(errb.String(), "user") || strings.Contains(errb.String(), "pw") {
-		t.Errorf("credentials leaked in error output:\n%s", errb)
+	stdout := out.String()
+	requireStdoutError(t, stdout, errb.String(), "connection refused")
+	if strings.Contains(stdout, "user") || strings.Contains(stdout, "pw") {
+		t.Errorf("credentials leaked in error output:\n%s", stdout)
 	}
 }
 

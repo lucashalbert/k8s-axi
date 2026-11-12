@@ -155,9 +155,10 @@ func TestRestartRefusals(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			e := restartEnv(t)
 			code, out, errOut := run(t, e.c, tc.args...)
-			if code != tc.code || out != "" || !strings.Contains(errOut, "hint") {
+			if code != tc.code {
 				t.Fatalf("exit %d (want %d), stdout %q, stderr %s", code, tc.code, out, errOut)
 			}
+			requireStdoutError(t, out, errOut, "hint")
 			if len(e.patches)+len(e.dryRuns) != 0 {
 				t.Errorf("refused restart still sent a patch")
 			}
@@ -168,8 +169,10 @@ func TestRestartRefusals(t *testing.T) {
 func TestRestartForbidden(t *testing.T) {
 	e := restartEnv(t)
 	e.failOn["patch deployments"] = apierrors.NewForbidden(schema.GroupResource{Resource: "deployments"}, "web", nil)
-	code, _, errOut := run(t, e.c, "rollout", "restart", "deploy/web", "-n", "default")
-	if code != 1 || !strings.Contains(errOut, "RBAC denied 'patch'") {
+	code, out, errOut := run(t, e.c, "rollout", "restart", "deploy/web", "-n", "default")
+	if code != 1 {
 		t.Errorf("exit %d: %s", code, errOut)
+	} else {
+		requireStdoutError(t, out, errOut, "RBAC denied 'patch'")
 	}
 }

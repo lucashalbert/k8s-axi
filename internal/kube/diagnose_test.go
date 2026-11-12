@@ -172,16 +172,22 @@ func TestDiagnoseFullAndTOON(t *testing.T) {
 func TestDiagnoseUsageAndMissingTarget(t *testing.T) {
 	c, _ := readFixture(t, brokenWeb(t))
 	for _, args := range [][]string{{"diagnose"}, {"diagnose", "deploy"}, {"diagnose", "secrets", "x"}, {"diagnose", "nodes", "n1"}} {
-		if code, _, errOut := run(t, c, args...); code != 2 {
+		if code, out, errOut := run(t, c, args...); code != 2 {
 			t.Errorf("%v: exit %d, want 2: %s", args, code, errOut)
+		} else {
+			requireStdoutError(t, out, errOut)
 		}
 	}
-	code, _, errOut := run(t, c, "diagnose", "secrets", "x")
-	if code != 2 || !strings.Contains(errOut, "pods, deployments, statefulsets, daemonsets, jobs and services") {
+	code, out, errOut := run(t, c, "diagnose", "secrets", "x")
+	if code != 2 {
 		t.Errorf("unsupported kind should list the supported ones: %s", errOut)
+	} else {
+		requireStdoutError(t, out, errOut, "pods, deployments, statefulsets, daemonsets, jobs and services")
 	}
-	if code, _, errOut := run(t, c, "diagnose", "deploy/nope"); code != 1 || !strings.Contains(errOut, "not found") {
+	if code, out, errOut := run(t, c, "diagnose", "deploy/nope"); code != 1 {
 		t.Errorf("missing target: exit %d: %s", code, errOut)
+	} else {
+		requireStdoutError(t, out, errOut, "not found")
 	}
 }
 

@@ -17,6 +17,21 @@ import (
 	"github.com/lucashalbert/axi-sdk-go/update"
 )
 
+func requireStdoutError(t testing.TB, stdout, stderr string, wants ...string) {
+	t.Helper()
+	if stderr != "" {
+		t.Errorf("stderr should be empty: %s", stderr)
+	}
+	if stdout == "" {
+		t.Error("stdout should contain error output")
+	}
+	for _, want := range wants {
+		if !strings.Contains(stdout, want) {
+			t.Errorf("error output missing %q:\n%s", want, stdout)
+		}
+	}
+}
+
 // testRoot builds the real command tree around fake clients.
 func testRoot(t testing.TB, c *Clients, loadErr error) (root *cobra.Command, stdout, stderr *bytes.Buffer) {
 	t.Helper()
@@ -84,29 +99,24 @@ func TestClusterInfoUnreachableIsRuntimeError(t *testing.T) {
 	if code := cli.Execute(root); code != 1 {
 		t.Fatalf("exit %d, want 1", code)
 	}
-	if out.Len() != 0 {
-		t.Errorf("stdout should be empty: %s", out)
-	}
-	for _, want := range []string{"kind-test", "connection refused", "hint"} {
-		if !strings.Contains(errb.String(), want) {
-			t.Errorf("stderr missing %q:\n%s", want, errb)
-		}
-	}
-	if strings.Contains(errb.String(), "goroutine") {
+	stdout := out.String()
+	requireStdoutError(t, stdout, errb.String(), "kind-test", "connection refused", "hint")
+	if strings.Contains(stdout, "goroutine") {
 		t.Error("stack trace in error output")
 	}
-	if strings.Contains(errb.String(), "user") || strings.Contains(errb.String(), "pw") {
-		t.Errorf("credentials leaked in error output:\n%s", errb)
+	if strings.Contains(stdout, "user") || strings.Contains(stdout, "pw") {
+		t.Errorf("credentials leaked in error output:\n%s", stdout)
 	}
 }
 
 func TestLoadUsageErrorPropagates(t *testing.T) {
-	root, _, errb := testRoot(t, nil, usageForTest())
+	root, out, errb := testRoot(t, nil, usageForTest())
 	root.SetArgs([]string{"cluster", "info"})
 	if code := cli.Execute(root); code != 2 {
 		t.Fatalf("exit %d, want 2", code)
 	}
-	if !strings.Contains(errb.String(), "alpha") {
-		t.Errorf("contexts not listed: %s", errb)
+	requireStdoutError(t, out.String(), errb.String(), "alpha")
+	if !strings.Contains(out.String(), "beta") {
+		t.Errorf("contexts not listed: %s", out)
 	}
 }

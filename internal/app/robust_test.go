@@ -109,7 +109,7 @@ func TestNoCurrentContextIsAUsageErrorListingContexts(t *testing.T) {
 	bin := binary(t)
 	kc := kubeconfig(t, "", "https://127.0.0.1:1")
 	code, out, errOut := runBin(t, bin, []string{"K8S_AXI_NO_UPDATE_CHECK=1"}, "get", "pods", "--kubeconfig", kc)
-	if code != 2 || out != "" || !strings.Contains(errOut, "prod") || !strings.Contains(errOut, "staging") || !strings.Contains(errOut, "--context") {
+	if code != 2 || errOut != "" || !strings.Contains(out, "prod") || !strings.Contains(out, "staging") || !strings.Contains(out, "--context") {
 		t.Errorf("exit %d stdout=%q stderr=%s", code, out, errOut)
 	}
 	// --context rescues it without touching the file.
@@ -134,7 +134,7 @@ func TestHangingAPIServerIsBoundedByTimeout(t *testing.T) {
 		if limit := 8 * time.Second; took > limit {
 			t.Errorf("%v took %v", args, took)
 		}
-		if code != 1 || out != "" || !strings.HasPrefix(errOut, "error:") || !strings.Contains(errOut, "hint:") || strings.Contains(errOut, "goroutine ") {
+		if code != 1 || errOut != "" || !strings.HasPrefix(out, "error:") || !strings.Contains(out, "hint:") || strings.Contains(out, "goroutine ") {
 			t.Errorf("%v: exit %d stdout=%q stderr=%s", args, code, out, errOut)
 		}
 	}
@@ -169,9 +169,9 @@ func TestUpdateFailureLeavesTheBinaryUntouched(t *testing.T) {
 				proxy = deadProxy(t)
 			}
 			before, _ := os.ReadFile(bin)
-			code, _, errOut := runBin(t, bin, []string{"HTTPS_PROXY=" + proxy, "HTTP_PROXY=" + proxy}, "update")
-			if code != 1 || strings.Contains(errOut, "goroutine ") || errOut == "" {
-				t.Errorf("exit %d stderr=%s", code, errOut)
+			code, out, _ := runBin(t, bin, []string{"HTTPS_PROXY=" + proxy, "HTTP_PROXY=" + proxy}, "update")
+			if code != 1 || strings.Contains(out, "goroutine ") || out == "" {
+				t.Errorf("exit %d stdout=%s", code, out)
 			}
 			if after, _ := os.ReadFile(bin); !bytes.Equal(before, after) {
 				t.Error("the binary changed")
