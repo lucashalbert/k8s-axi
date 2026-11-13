@@ -211,12 +211,16 @@ func TestHomeContextsRespectLimit(t *testing.T) {
 }
 
 func TestHomeExplicitBadInputStaysAnError(t *testing.T) {
-	if code, _, errOut := homeWithKubeconfig(t, noCurrentKubeconfig, "--context", "nope"); code != 2 || !strings.Contains(errOut, "not found") {
-		t.Errorf("unknown --context: exit %d: %s", code, errOut)
+	code, out, errOut := homeWithKubeconfig(t, noCurrentKubeconfig, "--context", "nope")
+	if code != 2 {
+		t.Errorf("unknown --context: exit %d", code)
 	}
-	if code, _, errOut := homeWithKubeconfig(t, "", "--kubeconfig", "/nonexistent/kubeconfig"); code != 2 || !strings.Contains(errOut, "kubeconfig file not found") {
-		t.Errorf("missing --kubeconfig: exit %d: %s", code, errOut)
+	requireStdoutError(t, out, errOut, "not found")
+	code, out, errOut = homeWithKubeconfig(t, "", "--kubeconfig", "/nonexistent/kubeconfig")
+	if code != 2 {
+		t.Errorf("missing --kubeconfig: exit %d", code)
 	}
+	requireStdoutError(t, out, errOut, "kubeconfig file not found")
 	if code, _, _ := homeWithKubeconfig(t, "not: [valid"); code != 1 {
 		t.Errorf("invalid kubeconfig: exit %d, want 1", code)
 	}
@@ -234,9 +238,10 @@ func TestHomeLeavesHelpAndUnknownCommandsAlone(t *testing.T) {
 	if code := cli.Execute(root); code != 0 || !strings.Contains(out.String(), "Available Commands") {
 		t.Errorf("help: exit %d:\n%s", code, out)
 	}
-	root, _, errOut := testRoot(t, c, nil)
+	root, out, errOut := testRoot(t, c, nil)
 	root.SetArgs([]string{"bogus"})
-	if code := cli.Execute(root); code != 2 || !strings.Contains(errOut.String(), "unknown command") {
-		t.Errorf("bogus: exit %d: %s", code, errOut)
+	if code := cli.Execute(root); code != 2 {
+		t.Errorf("bogus: exit %d", code)
 	}
+	requireStdoutError(t, out.String(), errOut.String(), "unknown command")
 }
